@@ -498,79 +498,102 @@
 
 @if ($canManageAccounts)
     <div class="modal fade" id="addAccountModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">إضافة حساب جديد</h5>
+        <div class="modal-dialog modal-xl modal-fullscreen-lg-down user-editor-dialog">
+            <div class="modal-content user-editor-modal">
+                <div class="modal-header user-editor-header">
+                    <div class="user-editor-heading">
+                        <div class="user-editor-avatar">COA</div>
+                        <div>
+                            <div class="user-editor-eyebrow">ربط مدخل جديد بشجرة الحسابات</div>
+                            <h5 class="modal-title mb-1">إضافة حساب جديد</h5>
+                            <p class="user-editor-subtitle mb-0">حدد موقع الحساب في الدليل المحاسبي لضمان دقة التقارير المالية والقيود الآلية.</p>
+                        </div>
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <form method="POST" action="{{ route('chart_of_accounts.store') }}" id="addAccountForm">
                     @csrf
-                    <div class="modal-body">
-                        <div class="alert alert-info">
-                            سيتم اقتراح الحساب الأب تلقائيًا حسب نوع الحساب، ويمكنك تغييره يدويًا قبل الحفظ.
+                    <div class="modal-body user-editor-body">
+                        <div class="user-editor-overview">
+                            <div class="user-editor-overview-item">
+                                <span class="user-editor-overview-label">التسلسل</span>
+                                <strong id="overviewAccountCode">تلقائي</strong>
+                            </div>
+                            <div class="user-editor-overview-item">
+                                <span class="user-editor-overview-label">النوع</span>
+                                <strong id="overviewAccountType">{{ $accountTypeOptions[old('account_type', 'asset')] ?? 'أصول' }}</strong>
+                            </div>
+                            <div class="user-editor-overview-item">
+                                <span class="user-editor-overview-label">الرصيد الابتدائي</span>
+                                <strong>0.00 {{ $company->currency }}</strong>
+                            </div>
+                            <div class="user-editor-overview-item">
+                                <span class="user-editor-overview-label">الحالة</span>
+                                <strong>جديد</strong>
+                            </div>
                         </div>
 
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label class="form-label">الكود</label>
-                                <input type="text" name="code" class="form-control @error('code') is-invalid @enderror" value="{{ old('code') }}" required>
-                                @error('code')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        <div class="user-editor-panel-highlight p-4 rounded-4 bg-white border">
+                            <div class="alert alert-info mb-4 border-0 bg-light-primary text-primary">
+                                <i class="fas fa-info-circle me-2"></i>
+                                سيتم اقتراح الحساب الأب وتوليد الكود تلقائيًا بناءً على نوع الحساب المختار.
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label">الاسم</label>
-                                <input type="text" name="name" class="form-control @error('name') is-invalid @enderror" value="{{ old('name') }}" required>
-                                @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">الاسم بالعربي</label>
-                                <input type="text" name="name_ar" class="form-control @error('name_ar') is-invalid @enderror" value="{{ old('name_ar') }}">
-                                @error('name_ar')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">نوع الحساب</label>
-                                <select name="account_type" id="accountTypeSelect" class="form-select @error('account_type') is-invalid @enderror" required>
-                                    @foreach ($accountTypeOptions as $value => $label)
-                                        <option value="{{ $value }}" @selected(old('account_type', 'asset') === $value)>{{ $label }}</option>
-                                    @endforeach
-                                </select>
-                                @error('account_type')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            </div>
-                            <div class="col-md-12">
-                                <label class="form-label">الحساب الأب</label>
-                                <select name="parent_id" id="parentAccountSelect" class="form-select @error('parent_id') is-invalid @enderror">
-                                    <option value="">بدون أب</option>
-                                    @foreach ($parentOptions as $option)
-                                        <option value="{{ $option['id'] }}" data-type="{{ $option['type'] }}" @selected((string) old('parent_id') === (string) $option['id'])>
-                                            {{ $option['label'] }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                <div class="form-text">سيتم اختيار الأب المقترح تلقائيًا حسب النوع، ويمكن تغييره هنا.</div>
-                                @error('parent_id')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
-                            </div>
-                            <div class="col-md-12">
-                                <label class="form-label">الوصف</label>
-                                <textarea name="description" class="form-control @error('description') is-invalid @enderror" rows="3">{{ old('description') }}</textarea>
-                                @error('description')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            </div>
-                            <div class="col-md-12">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="allows_direct_transactions" value="1" id="accountAllowsDirectTransactions" @checked(old('allows_direct_transactions'))>
-                                    <label class="form-check-label" for="accountAllowsDirectTransactions">يمكن الدفع والتحصيل بهذا الحساب</label>
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">اسم الحساب (English)</label>
+                                    <input type="text" name="name" class="form-control @error('name') is-invalid @enderror" value="{{ old('name') }}" required placeholder="e.g. Cash in Hand">
+                                    @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
                                 </div>
-                            </div>
-                            <div class="col-md-12">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="is_active" value="1" id="accountIsActive" @checked(old('is_active', '1') == '1')>
-                                    <label class="form-check-label" for="accountIsActive">حساب نشط</label>
+                                <div class="col-md-6">
+                                    <label class="form-label">الاسم بالعربي</label>
+                                    <input type="text" name="name_ar" class="form-control @error('name_ar') is-invalid @enderror" value="{{ old('name_ar') }}" placeholder="مثلاً: صندوق المحل">
+                                    @error('name_ar')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">نوع الحساب</label>
+                                    <select name="account_type" id="accountTypeSelect" class="form-select @error('account_type') is-invalid @enderror" required>
+                                        @foreach ($accountTypeOptions as $value => $label)
+                                            <option value="{{ $value }}" @selected(old('account_type', 'asset') === $value)>{{ $label }}</option>
+                                        @endforeach
+                                    </select>
+                                    @error('account_type')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">الحساب الأب</label>
+                                    <select name="parent_id" id="parentAccountSelect" class="form-select @error('parent_id') is-invalid @enderror">
+                                        <option value="">بدون أب (حساب رئيسي)</option>
+                                        @foreach ($parentOptions as $option)
+                                            <option value="{{ $option['id'] }}" data-type="{{ $option['type'] }}" @selected((string) old('parent_id') === (string) $option['id'])>
+                                                {{ $option['label'] }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    @error('parent_id')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
+                                </div>
+                                <div class="col-md-12">
+                                    <label class="form-label">الوصف</label>
+                                    <textarea name="description" class="form-control @error('description') is-invalid @enderror" rows="2">{{ old('description') }}</textarea>
+                                    @error('description')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check form-switch p-2 bg-light rounded-2 border-dashed">
+                                        <input class="form-check-input ms-0" type="checkbox" name="allows_direct_transactions" value="1" id="accountAllowsDirectTransactions" @checked(old('allows_direct_transactions'))>
+                                        <label class="form-check-label fw-semibold ms-2" for="accountAllowsDirectTransactions">يمكن الدفع/التحصيل بهذا الحساب</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check form-switch p-2 bg-light rounded-2 border-dashed">
+                                        <input class="form-check-input ms-0" type="checkbox" name="is_active" value="1" id="accountIsActive" @checked(old('is_active', '1') == '1')>
+                                        <label class="form-check-label fw-semibold ms-2" for="accountIsActive">الحساب نشط حالياً</label>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                        <button type="submit" class="btn btn-primary">إضافة حساب</button>
+                    <div class="modal-footer user-editor-footer">
+                        <button type="button" class="btn btn-light user-editor-cancel" data-bs-dismiss="modal">إلغاء</button>
+                        <button type="submit" class="btn btn-primary user-editor-submit">حفظ وإضافة الحساب</button>
                     </div>
                 </form>
             </div>

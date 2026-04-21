@@ -717,7 +717,7 @@ body.sidebar-open {
 .user-editor-modal {
     --user-editor-end-safe-space: 1rem;
     border: 0;
-    overflow: hidden;
+    overflow-y: auto;
     max-height: calc(100svh - 2rem);
     min-height: min(820px, calc(100svh - 2rem));
     display: flex;

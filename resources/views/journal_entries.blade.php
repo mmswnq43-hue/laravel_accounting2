@@ -34,6 +34,9 @@
             <a href="{{ $journalEntriesReportUrl }}" class="btn btn-outline-primary">
                 <i class="fas fa-chart-bar ms-1"></i> مركز التقارير
             </a>
+            <a href="{{ route('journal_entries.export', $filters) }}" class="btn btn-outline-success">
+                <i class="fas fa-file-excel ms-1"></i> تصدير للإكسل
+            </a>
         @endif
         @if ($canManageJournalEntries)
             <a href="{{ route('journal_entries.create') }}" class="btn btn-gradient">
@@ -144,8 +147,19 @@
                         </div>
                         <div class="btn-group">
                             <a href="{{ route('journal_entries.show', $entry) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i></a>
+                            @if ($canManageJournalEntries && $entry->status === 'draft' && $entry->entry_origin === 'manual')
+                                <a href="{{ route('journal_entries.edit', $entry) }}" class="btn btn-sm btn-outline-secondary" title="تعديل القيد"><i class="fas fa-edit"></i></a>
+                                <form action="{{ route('journal_entries.destroy', $entry) }}" method="POST" class="d-inline" onsubmit="return confirm('هل أنت متأكد من حذف هذا القيد؟');">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="حذف القيد"><i class="fas fa-trash"></i></button>
+                                </form>
+                            @endif
                             @if ($canManageJournalEntries && $entry->status === 'draft')
-                                <button type="button" class="btn btn-sm btn-outline-success" title="ترحيل القيد"><i class="fas fa-check"></i></button>
+                                <form action="{{ route('journal_entries.post', $entry) }}" method="POST" class="d-inline" onsubmit="return confirm('هل أنت متأكد من ترحيل هذا القيد؟ لا يمكن تعديله بعد الترحيل.');">
+                                    @csrf
+                                    <button type="submit" class="btn btn-sm btn-outline-success" title="ترحيل القيد"><i class="fas fa-check"></i></button>
+                                </form>
                             @endif
                         </div>
                     </div>

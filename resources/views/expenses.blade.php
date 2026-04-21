@@ -150,6 +150,61 @@
                                 <td>{{ number_format((float) $expense->total, 2) }} {{ $company->currency }}</td>
                                 <td class="list-actions-col">
                                     <div class="list-actions-group">
+                                        @if ($canManageExpenses)
+                                            <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editExpenseModal{{ $expense->id }}"><i class="fas fa-edit"></i></button>
+                                            @php
+                                                $editExpenseModalKey = 'edit-' . $expense->id;
+                                                $editExpenseModalHasErrors = $errors->any() && $activeExpenseModal === $editExpenseModalKey;
+                                            @endphp
+                                            <div class="modal fade" id="editExpenseModal{{ $expense->id }}" tabindex="-1" aria-hidden="true">
+                                                <div class="modal-dialog modal-xl modal-fullscreen-lg-down user-editor-dialog">
+                                                    <div class="modal-content user-editor-modal">
+                                                        <div class="modal-header user-editor-header">
+                                                            <div class="user-editor-heading">
+                                                                <div class="user-editor-avatar">EX</div>
+                                                                <div>
+                                                                    <div class="user-editor-eyebrow">تحديث سجل المصروف</div>
+                                                                    <h5 class="modal-title mb-1">تعديل مصروف بقيمة {{ number_format($expense->total, 2) }}</h5>
+                                                                    <p class="user-editor-subtitle mb-0">عدّل تفاصيل النفقة المالية، التصنيف المحاسبي، والمرفقات المرتبطة.</p>
+                                                                </div>
+                                                            </div>
+                                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                        </div>
+                                                        <form method="POST" action="{{ route('expenses.update', $expense) }}" enctype="multipart/form-data">
+                                                            @csrf
+                                                            @method('PUT')
+                                                            <input type="hidden" name="expense_modal" value="{{ $editExpenseModalKey }}">
+                                                            <div class="modal-body user-editor-body">
+                                                                <div class="user-editor-panel-highlight p-4 rounded-4 bg-white border">
+                                                                    @if ($editExpenseModalHasErrors)
+                                                                        <div class="alert alert-danger mb-4">
+                                                                            <ul class="mb-0 ps-3">
+                                                                                @foreach ($errors->all() as $error)
+                                                                                    <li>{{ $error }}</li>
+                                                                                @endforeach
+                                                                            </ul>
+                                                                        </div>
+                                                                    @endif
+                                                                    <div class="row g-3">
+                                                                        <div class="col-md-6"><label class="form-label">اسم المصروف</label><input type="text" name="name" class="form-control" value="{{ $editExpenseModalHasErrors ? old('name') : $expense->name }}" required></div>
+                                                                        <div class="col-md-6"><label class="form-label">تاريخ المصروف</label><input type="date" name="expense_date" class="form-control" value="{{ $editExpenseModalHasErrors ? old('expense_date') : optional($expense->expense_date)->format('Y-m-d') }}" required></div>
+                                                                        <div class="col-md-6"><label class="form-label">حساب المصروف</label><select name="expense_account_id" class="form-select" required>@foreach ($expenseAccounts as $account)<option value="{{ $account->id }}" {{ (string) ($editExpenseModalHasErrors ? old('expense_account_id') : $expense->expense_account_id) === (string) $account->id ? 'selected' : '' }}>{{ $account->code }} - {{ $account->name_ar ?? $account->name }}</option>@endforeach</select></div>
+                                                                        <div class="col-md-6"><label class="form-label">حساب السداد</label><select name="payment_account_id" class="form-select" required>@foreach ($paymentAccounts as $account)<option value="{{ $account->id }}" {{ (string) ($editExpenseModalHasErrors ? old('payment_account_id') : $expense->payment_account_id) === (string) $account->id ? 'selected' : '' }}>{{ $account->code }} - {{ $account->name_ar ?? $account->name }}</option>@endforeach</select></div>
+                                                                        <div class="col-md-4"><label class="form-label">المبلغ</label><input type="number" name="amount" class="form-control" step="0.01" min="0.01" value="{{ $editExpenseModalHasErrors ? old('amount') : $expense->amount }}" required lang="en" dir="ltr"></div>
+                                                                        <div class="col-md-4"><label class="form-label">الضريبة %</label><input type="number" name="tax_rate" class="form-control" step="0.01" min="0" max="100" value="{{ $editExpenseModalHasErrors ? old('tax_rate') : $expense->tax_rate }}" lang="en" dir="ltr"></div>
+                                                                        <div class="col-12"><label class="form-label">وصف المصروف</label><textarea name="description" class="form-control" rows="2">{{ $editExpenseModalHasErrors ? old('description') : $expense->description }}</textarea></div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div class="modal-footer user-editor-footer">
+                                                                <button type="button" class="btn btn-light user-editor-cancel" data-bs-dismiss="modal">إلغاء</button>
+                                                                <button type="submit" class="btn btn-primary user-editor-submit">حفظ التعديلات</button>
+                                                            </div>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        @endif
                                         <form method="POST" action="{{ route('expenses.destroy', $expense) }}" onsubmit="return confirm('هل أنت متأكد من حذف هذا المصروف؟ سيتم أيضًا عكس القيد المحاسبي المرتبط به.');">
                                             @csrf
                                             @method('DELETE')
@@ -166,48 +221,78 @@
     </div>
 </div>
 
-<div class="modal fade" id="addExpenseModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-fullscreen-sm-down">
-        <div class="modal-content">
-            <form method="POST" action="{{ route('expenses.store') }}">
-                @csrf
-                <div class="modal-header">
-                    <h5 class="modal-title">إضافة مصروف جديد</h5>
+@if ($canManageExpenses)
+    <div class="modal fade" id="addExpenseModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-fullscreen-lg-down user-editor-dialog">
+            <div class="modal-content user-editor-modal">
+                <div class="modal-header user-editor-header">
+                    <div class="user-editor-heading">
+                        <div class="user-editor-avatar">EX</div>
+                        <div>
+                            <div class="user-editor-eyebrow">تسجيل تدفق مالي خارج</div>
+                            <h5 class="modal-title mb-1">إضافة مصروف جديد</h5>
+                            <p class="user-editor-subtitle mb-0">سجل المصروفات التشغيلية أو الإدارية لضبط الميزانية وحساب الأرباح والخسائر.</p>
+                        </div>
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
-                    @if ($createExpenseModalHasErrors)
-                        <div class="alert alert-danger">
-                            <ul class="mb-0 ps-3">
-                                @foreach ($errors->all() as $error)
-                                    <li>{{ $error }}</li>
-                                @endforeach
-                            </ul>
+                <form method="POST" action="{{ route('expenses.store') }}">
+                    @csrf
+                    <input type="hidden" name="expense_modal" value="create">
+                    <div class="modal-body user-editor-body">
+                        <div class="user-editor-overview">
+                            <div class="user-editor-overview-item">
+                                <span class="user-editor-overview-label">المرجع</span>
+                                <strong>{{ $suggestedExpenseReference }}</strong>
+                            </div>
+                            <div class="user-editor-overview-item">
+                                <span class="user-editor-overview-label">حساب السداد</span>
+                                <strong>لم يُحدد</strong>
+                            </div>
+                            <div class="user-editor-overview-item">
+                                <span class="user-editor-overview-label">التاريخ</span>
+                                <strong>{{ now()->format('Y-m-d') }}</strong>
+                            </div>
+                            <div class="user-editor-overview-item">
+                                <span class="user-editor-overview-label">الحالة</span>
+                                <strong>جديد</strong>
+                            </div>
                         </div>
-                    @endif
-                    <div class="row g-3">
-                        <div class="col-md-6"><label class="form-label">اسم المصروف</label><input type="text" name="name" class="form-control" value="{{ old('name') }}" required></div>
-                        <div class="col-md-3"><label class="form-label">تاريخ المصروف</label><input type="date" name="expense_date" class="form-control" value="{{ old('expense_date', now()->format('Y-m-d')) }}" required></div>
-                        <div class="col-md-3">
-                            <label class="form-label">المرجع</label>
-                            <input type="text" name="reference" class="form-control" value="{{ old('reference', $suggestedExpenseReference) }}">
-                            <div class="form-text">يتم توليد المرجع تلقائيًا ويمكنك تعديله إذا لزم.</div>
+
+                        <div class="user-editor-panel-highlight p-4 rounded-4 bg-white border">
+                            @if ($createExpenseModalHasErrors)
+                                <div class="alert alert-danger mb-4">
+                                    <ul class="mb-0 ps-3">
+                                        @foreach ($errors->all() as $error)
+                                            <li>{{ $error }}</li>
+                                        @endforeach
+                                    </ul>
+                                </div>
+                            @endif
+                            <div class="row g-3">
+                                <div class="col-md-6"><label class="form-label">اسم المصروف</label><input type="text" name="name" class="form-control" value="{{ old('name') }}" required></div>
+                                <div class="col-md-3"><label class="form-label">تاريخ المصروف</label><input type="date" name="expense_date" class="form-control" value="{{ old('expense_date', now()->format('Y-m-d')) }}" required></div>
+                                <div class="col-md-3">
+                                    <label class="form-label">المرجع</label>
+                                    <input type="text" name="reference" class="form-control" value="{{ old('reference', $suggestedExpenseReference) }}">
+                                </div>
+                                <div class="col-md-6"><label class="form-label">حساب المصروف</label><select name="expense_account_id" class="form-select" required><option value="">اختر الحساب</option>@foreach ($expenseAccounts as $account)<option value="{{ $account->id }}" {{ (string) old('expense_account_id') === (string) $account->id ? 'selected' : '' }}>{{ $account->code }} - {{ $account->name_ar ?? $account->name }}</option>@endforeach</select></div>
+                                <div class="col-md-6"><label class="form-label">حساب السداد</label><select name="payment_account_id" class="form-select" required><option value="">اختر الحساب</option>@foreach ($paymentAccounts as $account)<option value="{{ $account->id }}" {{ (string) old('payment_account_id') === (string) $account->id ? 'selected' : '' }}>{{ $account->code }} - {{ $account->name_ar ?? $account->name }}</option>@endforeach</select></div>
+                                <div class="col-md-4"><label class="form-label">المبلغ قبل الضريبة</label><input type="number" name="amount" class="form-control" min="0.01" step="0.01" value="{{ old('amount') }}" required lang="en" dir="ltr"></div>
+                                <div class="col-md-4"><label class="form-label">الضريبة %</label><input type="number" name="tax_rate" class="form-control" min="0" max="100" step="0.01" value="{{ old('tax_rate', 0) }}" lang="en" dir="ltr"></div>
+                                <div class="col-12"><label class="form-label">وصف المصروف</label><textarea name="description" class="form-control" rows="3">{{ old('description') }}</textarea></div>
+                            </div>
                         </div>
-                        <div class="col-md-6"><label class="form-label">حساب المصروف</label><select name="expense_account_id" class="form-select" required><option value="">اختر الحساب</option>@foreach ($expenseAccounts as $account)<option value="{{ $account->id }}" {{ (string) old('expense_account_id') === (string) $account->id ? 'selected' : '' }}>{{ $account->code }} - {{ $account->name_ar ?? $account->name }}</option>@endforeach</select></div>
-                        <div class="col-md-6"><label class="form-label">حساب السداد</label><select name="payment_account_id" class="form-select" required><option value="">اختر الحساب</option>@foreach ($paymentAccounts as $account)<option value="{{ $account->id }}" {{ (string) old('payment_account_id') === (string) $account->id ? 'selected' : '' }}>{{ $account->code }} - {{ $account->name_ar ?? $account->name }}</option>@endforeach</select></div>
-                        <div class="col-md-4"><label class="form-label">المبلغ قبل الضريبة</label><input type="number" name="amount" class="form-control" min="0.01" step="0.01" value="{{ old('amount') }}" required lang="en" dir="ltr"></div>
-                        <div class="col-md-4"><label class="form-label">الضريبة %</label><input type="number" name="tax_rate" class="form-control" min="0" max="100" step="0.01" value="{{ old('tax_rate', 0) }}" lang="en" dir="ltr"></div>
-                        <div class="col-12"><label class="form-label">وصف المصروف</label><textarea name="description" class="form-control" rows="3">{{ old('description') }}</textarea></div>
                     </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                    <button type="submit" class="btn btn-primary">حفظ المصروف</button>
-                </div>
-            </form>
+                    <div class="modal-footer user-editor-footer">
+                        <button type="button" class="btn btn-light user-editor-cancel" data-bs-dismiss="modal">إلغاء</button>
+                        <button type="submit" class="btn btn-primary user-editor-submit">حفظ المصروف</button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
-</div>
+@endif
 @endsection
 
 @push('scripts')

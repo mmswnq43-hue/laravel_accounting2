@@ -116,60 +116,92 @@
         </div>
 
         @if ($canManageSuppliers)
+            @php
+                $editSupplierModalKey = 'edit-' . $supplier->id;
+                $editSupplierModalHasErrors = $errors->any() && $activeSupplierModal === $editSupplierModalKey;
+                $supplierCountryLabel = $supplier->country ?: $companyCountryLabel;
+                $selectedCity = $editSupplierModalHasErrors ? old('city') : $supplier->city;
+                $initials = mb_strtoupper(mb_substr($supplier->name ?? '', 0, 1) . mb_substr($supplier->name_ar ?? '', 0, 1));
+                if (empty($initials)) $initials = 'SU';
+            @endphp
             <div class="modal fade" id="editSupplierModal{{ $supplier->id }}" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog">
-                    <div class="modal-content">
+                <div class="modal-dialog modal-xl modal-fullscreen-lg-down user-editor-dialog">
+                    <div class="modal-content user-editor-modal">
+                        <div class="modal-header user-editor-header">
+                            <div class="user-editor-heading">
+                                <div class="user-editor-avatar">{{ $initials }}</div>
+                                <div>
+                                    <div class="user-editor-eyebrow">تحديث بيانات المورد</div>
+                                    <h5 class="modal-title mb-1">{{ $supplier->name }}</h5>
+                                    <p class="user-editor-subtitle mb-0">عدّل معلومات التواصل، الموقع، والحد الائتماني للمورد.</p>
+                                </div>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
                         <form method="POST" action="{{ route('suppliers.update', $supplier) }}">
                             @csrf
                             @method('PUT')
                             <input type="hidden" name="supplier_modal" value="{{ $editSupplierModalKey }}">
-                            <div class="modal-header">
-                                <h5 class="modal-title">تعديل المورد {{ $supplier->name }}</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                            </div>
-                            <div class="modal-body">
-                                @if ($editSupplierModalHasErrors)
-                                    <div class="alert alert-danger">
-                                        <ul class="mb-0 ps-3">
-                                            @foreach ($errors->all() as $error)
-                                                <li>{{ $error }}</li>
-                                            @endforeach
-                                        </ul>
+                            <div class="modal-body user-editor-body">
+                                <div class="user-editor-overview">
+                                    <div class="user-editor-overview-item">
+                                        <span class="user-editor-overview-label">الرصيد المستحق</span>
+                                        <strong class="{{ $supplier->balance > 0 ? 'text-danger' : 'text-success' }}">{{ number_format((float) $supplier->balance, 2) }} {{ $company->currency }}</strong>
                                     </div>
-                                @endif
-                                <div class="row g-3">
-                                    <div class="col-md-6"><label class="form-label">الاسم</label><input type="text" name="name" class="form-control" value="{{ $editSupplierModalHasErrors ? old('name') : $supplier->name }}" required></div>
-                                    <div class="col-md-6"><label class="form-label">الاسم بالعربي</label><input type="text" name="name_ar" class="form-control" value="{{ $editSupplierModalHasErrors ? old('name_ar') : $supplier->name_ar }}"></div>
-                                    <div class="col-md-6"><label class="form-label">الكود</label><input type="text" name="code" class="form-control" value="{{ $editSupplierModalHasErrors ? old('code') : $supplier->code }}"></div>
-                                    <div class="col-md-6"><label class="form-label">الحالة</label><select name="is_active" class="form-select"><option value="1" {{ (string) ($editSupplierModalHasErrors ? old('is_active', $supplier->is_active ? '1' : '0') : ($supplier->is_active ? '1' : '0')) === '1' ? 'selected' : '' }}>نشط</option><option value="0" {{ (string) ($editSupplierModalHasErrors ? old('is_active', $supplier->is_active ? '1' : '0') : ($supplier->is_active ? '1' : '0')) === '0' ? 'selected' : '' }}>غير نشط</option></select></div>
-                                    <div class="col-md-6"><label class="form-label">البريد الإلكتروني</label><input type="email" name="email" class="form-control" value="{{ $editSupplierModalHasErrors ? old('email') : $supplier->email }}"></div>
-                                    <div class="col-md-6"><label class="form-label">الهاتف</label><input type="text" name="phone" class="form-control" value="{{ $editSupplierModalHasErrors ? old('phone') : $supplier->phone }}"></div>
-                                    <div class="col-md-6"><label class="form-label">الجوال</label><input type="text" name="mobile" class="form-control" value="{{ $editSupplierModalHasErrors ? old('mobile') : $supplier->mobile }}"></div>
-                                    <div class="col-md-6">
-                                        <label class="form-label">المدينة</label>
-                                        @php
-                                            $selectedCity = $editSupplierModalHasErrors ? old('city') : $supplier->city;
-                                        @endphp
-                                        <select name="city" class="form-select">
-                                            <option value="">اختر المدينة</option>
-                                            @foreach ($companyCities as $city)
-                                                <option value="{{ $city }}" {{ $selectedCity === $city ? 'selected' : '' }}>{{ $city }}</option>
-                                            @endforeach
-                                            @if ($selectedCity && ! $companyCities->contains($selectedCity))
-                                                <option value="{{ $selectedCity }}" selected>{{ $selectedCity }}</option>
-                                            @endif
-                                        </select>
-                                        <div class="form-text">الدولة المعتمدة: {{ $companyCountryLabel }}</div>
+                                    <div class="user-editor-overview-item">
+                                        <span class="user-editor-overview-label">عدد المنتجات</span>
+                                        <strong>{{ $supplier->products_count }}</strong>
                                     </div>
-                                    <div class="col-md-6"><label class="form-label">الدولة</label><input type="text" class="form-control" value="{{ $companyCountryLabel }}" readonly></div>
-                                    <div class="col-md-6"><label class="form-label">الرقم الضريبي</label><input type="text" name="tax_number" class="form-control" value="{{ $editSupplierModalHasErrors ? old('tax_number') : $supplier->tax_number }}"></div>
-                                    <div class="col-md-6"><label class="form-label">الحد الائتماني</label><input type="number" name="credit_limit" class="form-control" min="0" step="0.01" value="{{ $editSupplierModalHasErrors ? old('credit_limit') : $supplier->credit_limit }}" lang="en" dir="ltr"></div>
-                                    <div class="col-12"><label class="form-label">العنوان</label><textarea name="address" class="form-control" rows="3">{{ $editSupplierModalHasErrors ? old('address') : $supplier->address }}</textarea></div>
+                                    <div class="user-editor-overview-item">
+                                        <span class="user-editor-overview-label">المدينة</span>
+                                        <strong>{{ $supplier->city ?: 'غير محدد' }}</strong>
+                                    </div>
+                                    <div class="user-editor-overview-item">
+                                        <span class="user-editor-overview-label">الحالة</span>
+                                        <strong>{{ $supplier->is_active ? 'نشط' : 'غير نشط' }}</strong>
+                                    </div>
+                                </div>
+
+                                <div class="user-editor-panel-highlight p-4 rounded-4 bg-white border">
+                                    @if ($editSupplierModalHasErrors)
+                                        <div class="alert alert-danger mb-4">
+                                            <ul class="mb-0 ps-3">
+                                                @foreach ($errors->all() as $error)
+                                                    <li>{{ $error }}</li>
+                                                @endforeach
+                                            </ul>
+                                        </div>
+                                    @endif
+                                    <div class="row g-3">
+                                        <div class="col-md-6"><label class="form-label">الاسم</label><input type="text" name="name" class="form-control" value="{{ $editSupplierModalHasErrors ? old('name') : $supplier->name }}" required></div>
+                                        <div class="col-md-6"><label class="form-label">الاسم بالعربي</label><input type="text" name="name_ar" class="form-control" value="{{ $editSupplierModalHasErrors ? old('name_ar') : $supplier->name_ar }}"></div>
+                                        <div class="col-md-6"><label class="form-label">الكود</label><input type="text" name="code" class="form-control" value="{{ $editSupplierModalHasErrors ? old('code') : $supplier->code }}"></div>
+                                        <div class="col-md-6"><label class="form-label">الحالة</label><select name="is_active" class="form-select"><option value="1" {{ (string) ($editSupplierModalHasErrors ? old('is_active', $supplier->is_active ? '1' : '0') : ($supplier->is_active ? '1' : '0')) === '1' ? 'selected' : '' }}>نشط</option><option value="0" {{ (string) ($editSupplierModalHasErrors ? old('is_active', $supplier->is_active ? '1' : '0') : ($supplier->is_active ? '1' : '0')) === '0' ? 'selected' : '' }}>غير نشط</option></select></div>
+                                        <div class="col-md-6"><label class="form-label">البريد الإلكتروني</label><input type="email" name="email" class="form-control" value="{{ $editSupplierModalHasErrors ? old('email') : $supplier->email }}"></div>
+                                        <div class="col-md-6"><label class="form-label">الهاتف</label><input type="text" name="phone" class="form-control" value="{{ $editSupplierModalHasErrors ? old('phone') : $supplier->phone }}"></div>
+                                        <div class="col-md-6"><label class="form-label">الجوال</label><input type="text" name="mobile" class="form-control" value="{{ $editSupplierModalHasErrors ? old('mobile') : $supplier->mobile }}"></div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">المدينة</label>
+                                            <select name="city" class="form-select">
+                                                <option value="">اختر المدينة</option>
+                                                @foreach ($companyCities as $city)
+                                                    <option value="{{ $city }}" {{ $selectedCity === $city ? 'selected' : '' }}>{{ $city }}</option>
+                                                @endforeach
+                                                @if ($selectedCity && ! $companyCities->contains($selectedCity))
+                                                    <option value="{{ $selectedCity }}" selected>{{ $selectedCity }}</option>
+                                                @endif
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6"><label class="form-label">الدولة</label><input type="text" class="form-control" value="{{ $companyCountryLabel }}" readonly></div>
+                                        <div class="col-md-6"><label class="form-label">الرقم الضريبي</label><input type="text" name="tax_number" class="form-control" value="{{ $editSupplierModalHasErrors ? old('tax_number') : $supplier->tax_number }}"></div>
+                                        <div class="col-md-6"><label class="form-label">الحد الائتماني</label><input type="number" name="credit_limit" class="form-control" min="0" step="0.01" value="{{ $editSupplierModalHasErrors ? old('credit_limit') : $supplier->credit_limit }}" lang="en" dir="ltr"></div>
+                                        <div class="col-12"><label class="form-label">العنوان</label><textarea name="address" class="form-control" rows="3">{{ $editSupplierModalHasErrors ? old('address') : $supplier->address }}</textarea></div>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                                <button type="submit" class="btn btn-primary">حفظ التعديلات</button>
+                            <div class="modal-footer user-editor-footer">
+                                <button type="button" class="btn btn-light user-editor-cancel" data-bs-dismiss="modal">إلغاء</button>
+                                <button type="submit" class="btn btn-primary user-editor-submit">حفظ التعديلات</button>
                             </div>
                         </form>
                     </div>
@@ -192,52 +224,79 @@
 
 @if ($canManageSuppliers)
     <div class="modal fade" id="addSupplierModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
+        <div class="modal-dialog modal-xl modal-fullscreen-lg-down user-editor-dialog">
+            <div class="modal-content user-editor-modal">
+                <div class="modal-header user-editor-header">
+                    <div class="user-editor-heading">
+                        <div class="user-editor-avatar">SU</div>
+                        <div>
+                            <div class="user-editor-eyebrow">ربط شريك توريد جديد</div>
+                            <h5 class="modal-title mb-1">إضافة مورد جديد</h5>
+                            <p class="user-editor-subtitle mb-0">أنشئ ملف المورد للبدء في تسجيل عمليات الشراء وإدارة الديون التجارية.</p>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
                 <form method="POST" action="{{ route('suppliers.store') }}">
                     @csrf
                     <input type="hidden" name="supplier_modal" value="create">
-                    <div class="modal-header">
-                        <h5 class="modal-title">إضافة مورد جديد</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        @if ($createSupplierModalHasErrors)
-                            <div class="alert alert-danger">
-                                <ul class="mb-0 ps-3">
-                                    @foreach ($errors->all() as $error)
-                                        <li>{{ $error }}</li>
-                                    @endforeach
-                                </ul>
+                    <div class="modal-body user-editor-body">
+                        <div class="user-editor-overview">
+                            <div class="user-editor-overview-item">
+                                <span class="user-editor-overview-label">الرصيد الابتدائي</span>
+                                <strong>0.00 {{ $company->currency }}</strong>
                             </div>
-                        @endif
-                        <div class="row g-3">
-                            <div class="col-md-6"><label class="form-label">الاسم</label><input type="text" name="name" class="form-control" value="{{ old('name') }}" required></div>
-                            <div class="col-md-6"><label class="form-label">الاسم بالعربي</label><input type="text" name="name_ar" class="form-control" value="{{ old('name_ar') }}"></div>
-                            <div class="col-md-6"><label class="form-label">الكود</label><input type="text" name="code" class="form-control" value="{{ old('code') }}" placeholder="يُنشأ تلقائيًا إذا تُرك فارغًا"></div>
-                            <div class="col-md-6"><label class="form-label">الحالة</label><select name="is_active" class="form-select"><option value="1" {{ old('is_active', '1') === '1' ? 'selected' : '' }}>نشط</option><option value="0" {{ old('is_active') === '0' ? 'selected' : '' }}>غير نشط</option></select></div>
-                            <div class="col-md-6"><label class="form-label">البريد الإلكتروني</label><input type="email" name="email" class="form-control" value="{{ old('email') }}"></div>
-                            <div class="col-md-6"><label class="form-label">الهاتف</label><input type="text" name="phone" class="form-control" value="{{ old('phone') }}"></div>
-                            <div class="col-md-6"><label class="form-label">الجوال</label><input type="text" name="mobile" class="form-control" value="{{ old('mobile') }}"></div>
-                            <div class="col-md-6">
-                                <label class="form-label">المدينة</label>
-                                <select name="city" class="form-select">
-                                    <option value="">اختر المدينة</option>
-                                    @foreach ($companyCities as $city)
-                                        <option value="{{ $city }}" {{ old('city') === $city ? 'selected' : '' }}>{{ $city }}</option>
-                                    @endforeach
-                                </select>
-                                <div class="form-text">الدولة المعتمدة: {{ $companyCountryLabel }}</div>
+                            <div class="user-editor-overview-item">
+                                <span class="user-editor-overview-label">المنتجات المرتبطة</span>
+                                <strong>0 منتج</strong>
                             </div>
-                            <div class="col-md-6"><label class="form-label">الدولة</label><input type="text" class="form-control" value="{{ $companyCountryLabel }}" readonly></div>
-                            <div class="col-md-6"><label class="form-label">الرقم الضريبي</label><input type="text" name="tax_number" class="form-control" value="{{ old('tax_number') }}"></div>
-                            <div class="col-md-6"><label class="form-label">الحد الائتماني</label><input type="number" name="credit_limit" class="form-control" min="0" step="0.01" value="{{ old('credit_limit', 0) }}" lang="en" dir="ltr"></div>
-                            <div class="col-12"><label class="form-label">العنوان</label><textarea name="address" class="form-control" rows="3">{{ old('address') }}</textarea></div>
+                            <div class="user-editor-overview-item">
+                                <span class="user-editor-overview-label">المنطقة</span>
+                                <strong>{{ $companyCountryLabel }}</strong>
+                            </div>
+                            <div class="user-editor-overview-item">
+                                <span class="user-editor-overview-label">الحالة</span>
+                                <strong>جديد</strong>
+                            </div>
+                        </div>
+
+                        <div class="user-editor-panel-highlight p-4 rounded-4 bg-white border">
+                            @if ($createSupplierModalHasErrors)
+                                <div class="alert alert-danger mb-4">
+                                    <ul class="mb-0 ps-3">
+                                        @foreach ($errors->all() as $error)
+                                            <li>{{ $error }}</li>
+                                        @endforeach
+                                    </ul>
+                                </div>
+                            @endif
+                            <div class="row g-3">
+                                <div class="col-md-6"><label class="form-label">الاسم</label><input type="text" name="name" class="form-control" value="{{ old('name') }}" required></div>
+                                <div class="col-md-6"><label class="form-label">الاسم بالعربي</label><input type="text" name="name_ar" class="form-control" value="{{ old('name_ar') }}"></div>
+
+                                <div class="col-md-6"><label class="form-label">الحالة</label><select name="is_active" class="form-select"><option value="1" {{ old('is_active', '1') === '1' ? 'selected' : '' }}>نشط</option><option value="0" {{ old('is_active') === '0' ? 'selected' : '' }}>غير نشط</option></select></div>
+                                <div class="col-md-6"><label class="form-label">البريد الإلكتروني</label><input type="email" name="email" class="form-control" value="{{ old('email') }}"></div>
+                                <div class="col-md-6"><label class="form-label">الهاتف</label><input type="text" name="phone" class="form-control" value="{{ old('phone') }}"></div>
+                                <div class="col-md-6"><label class="form-label">الجوال</label><input type="text" name="mobile" class="form-control" value="{{ old('mobile') }}"></div>
+                                <div class="col-md-6">
+                                    <label class="form-label">المدينة</label>
+                                    <select name="city" class="form-select">
+                                        <option value="">اختر المدينة</option>
+                                        @foreach ($companyCities as $city)
+                                            <option value="{{ $city }}" {{ old('city') === $city ? 'selected' : '' }}>{{ $city }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="col-md-6"><label class="form-label">الدولة</label><input type="text" class="form-control" value="{{ $companyCountryLabel }}" readonly></div>
+                                <div class="col-md-6"><label class="form-label">الرقم الضريبي</label><input type="text" name="tax_number" class="form-control" value="{{ old('tax_number') }}"></div>
+                                <div class="col-md-6"><label class="form-label">الحد الائتماني</label><input type="number" name="credit_limit" class="form-control" min="0" step="0.01" value="{{ old('credit_limit', 0) }}" lang="en" dir="ltr"></div>
+                                <div class="col-12"><label class="form-label">العنوان</label><textarea name="address" class="form-control" rows="3">{{ old('address') }}</textarea></div>
+                            </div>
                         </div>
                     </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                        <button type="submit" class="btn btn-primary">إضافة المورد</button>
+                    <div class="modal-footer user-editor-footer">
+                        <button type="button" class="btn btn-light user-editor-cancel" data-bs-dismiss="modal">إلغاء</button>
+                        <button type="submit" class="btn btn-primary user-editor-submit">إضافة المورد</button>
                     </div>
                 </form>
             </div>

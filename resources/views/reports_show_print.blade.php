@@ -4,34 +4,208 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ $reportPayload['title'] }} - {{ $company->name }}</title>
-    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>
-        * { box-sizing: border-box; font-family: 'Tajawal', sans-serif; }
-        body { margin: 0; background: #eef2f7; color: #0f172a; padding: 24px; }
-        .sheet { max-width: 1240px; margin: 0 auto; background: #fff; padding: 32px; border-radius: 20px; box-shadow: 0 20px 50px rgba(15, 23, 42, 0.12); }
-        .header { display: flex; justify-content: space-between; align-items: start; gap: 20px; margin-bottom: 24px; border-bottom: 2px solid #e5e7eb; padding-bottom: 20px; }
-        .title { font-size: 28px; font-weight: 800; margin: 0 0 8px; }
-        .muted { color: #64748b; font-size: 14px; line-height: 1.8; }
-        .chips { margin: 16px 0 0; display: flex; flex-wrap: wrap; gap: 8px; }
-        .chip { display: inline-block; padding: 8px 12px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; font-size: 13px; }
-        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
-        .stat { border: 1px solid #e5e7eb; border-radius: 16px; padding: 16px; }
-        .stat-label { color: #64748b; font-size: 14px; margin-bottom: 8px; }
-        .stat-value { font-size: 24px; font-weight: 800; }
-        table { width: 100%; border-collapse: collapse; }
-        thead th { background: #0f172a; color: #fff; padding: 12px; text-align: right; font-size: 14px; }
-        tbody td { padding: 12px; border-bottom: 1px solid #e5e7eb; vertical-align: top; font-size: 14px; }
-        .number-cell { font-weight: 700; }
-        .footer { margin-top: 20px; color: #64748b; font-size: 13px; text-align: center; }
+        :root {
+            --primary-color: #1e293b;
+            --accent-color: #2563eb;
+            --border-color: #e2e8f0;
+            --text-main: #334155;
+            --text-muted: #64748b;
+        }
+
+        * { 
+            box-sizing: border-box; 
+            font-family: 'Cairo', sans-serif; 
+        }
+
+        body { 
+            margin: 0; 
+            background: #f8fafc; 
+            color: var(--text-main); 
+            padding: 40px; 
+            line-height: 1.6;
+        }
+
+        .document-wrapper { 
+            max-width: 1000px; 
+            margin: 0 auto; 
+            background: #fff; 
+            padding: 50px; 
+            border-radius: 4px; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            position: relative;
+            min-height: 1200px;
+        }
+
+        /* Header Styles */
+        .doc-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid var(--primary-color);
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+
+        .company-info h1 {
+            margin: 0;
+            font-size: 24px;
+            color: var(--primary-color);
+            font-weight: 800;
+        }
+
+        .company-info p {
+            margin: 2px 0;
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        .document-title-box {
+            text-align: left;
+        }
+
+        .document-title-box h2 {
+            margin: 0;
+            font-size: 28px;
+            color: var(--accent-color);
+            text-transform: uppercase;
+        }
+
+        /* Info Grid */
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin-bottom: 30px;
+        }
+
+        .info-section h3 {
+            font-size: 14px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 5px;
+            margin-bottom: 10px;
+        }
+
+        .info-section p {
+            margin: 4px 0;
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        /* Stats Cards */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: #f1f5f9;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-card .label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 5px;
+        }
+
+        .stat-card .value {
+            display: block;
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+
+        /* Table Styles */
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-bottom: 40px;
+        }
+
+        thead th { 
+            background: #f8fafc; 
+            color: var(--primary-color); 
+            padding: 12px 10px; 
+            text-align: right; 
+            font-size: 13px;
+            border-bottom: 2px solid var(--border-color);
+            font-weight: 700;
+        }
+
+        tbody td { 
+            padding: 12px 10px; 
+            border-bottom: 1px solid var(--border-color);
+            font-size: 13px;
+        }
+
+        .number {
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .running-balance {
+            background: #fdfdfd;
+            font-weight: 800;
+            color: var(--accent-color);
+        }
+
+        /* Footer / Signatures */
+        .doc-footer {
+            margin-top: 60px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 100px;
+            text-align: center;
+        }
+
+        .signature-box {
+            border-top: 1px solid var(--text-muted);
+            padding-top: 10px;
+        }
+
+        .signature-box p {
+            margin: 0;
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        .stamp-area {
+            height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed var(--border-color);
+            color: var(--border-color);
+            border-radius: 50%;
+            width: 100px;
+            margin: 0 auto 10px auto;
+            font-size: 12px;
+        }
+
         @media print {
             body { padding: 0; background: #fff; }
-            .sheet { max-width: 100%; box-shadow: none; border-radius: 0; padding: 16px; }
+            .document-wrapper { 
+                max-width: 100%; 
+                box-shadow: none; 
+                padding: 20px; 
+                min-height: auto;
+            }
+            .no-print { display: none; }
         }
     </style>
 </head>
 <body>
     @php
-        $defaultValueFormat = $reportPayload['value_format'] ?? 'currency';
         $formatMetric = static function ($value, string $format) use ($company): string {
             return match ($format) {
                 'currency' => number_format((float) $value, 2) . ' ' . $company->currency,
@@ -40,36 +214,57 @@
                 default => blank($value) ? '—' : (string) $value,
             };
         };
+        $defaultValueFormat = $reportPayload['value_format'] ?? 'currency';
     @endphp
-    <div class="sheet">
-        <div class="header">
-            <div>
-                <h1 class="title">{{ $reportPayload['title'] }}</h1>
-                <div class="muted">{{ $company->name }}</div>
-                <div class="muted">{{ $reportPayload['description'] }}</div>
-                <div class="chips">
-                    <span class="chip">{{ $reportPayload['date_range_label'] }}</span>
-                    <span class="chip">{{ $reportMeta['title'] }}</span>
-                </div>
-                <div class="muted" style="margin-top: 12px;">{{ $reportPayload['insight'] }}</div>
+
+    <div class="document-wrapper">
+        <!-- Header -->
+        <header class="doc-header">
+            <div class="company-info">
+                <h1>{{ $company->name }}</h1>
+                <p>الرقم الضريبي: {{ $company->tax_number ?? '—' }}</p>
+                <p>{{ $company->address ?? '' }}</p>
             </div>
-            <div class="muted">تاريخ الإصدار: {{ now()->format('Y-m-d H:i') }}</div>
+            <div class="document-title-box">
+                <h2>{{ $reportPayload['title'] }}</h2>
+                <p class="muted">تاريخ الإصدار: {{ now()->format('Y-m-d') }}</p>
+            </div>
+        </header>
+
+        <!-- Context Info -->
+        <div class="info-grid">
+            <div class="info-section">
+                <h3>بيانات العميل</h3>
+                <p>{{ $reportPayload['customer']->name ?? 'جميع العملاء' }}</p>
+                @if(isset($reportPayload['customer']->tax_number))
+                    <p>الرقم الضريبي: {{ $reportPayload['customer']->tax_number }}</p>
+                @endif
+                <p>{{ $reportPayload['customer']->address ?? '' }}</p>
+            </div>
+            <div class="info-section" style="text-align: left;">
+                <h3>فترة التقرير</h3>
+                <p>{{ $reportPayload['date_range_label'] }}</p>
+            </div>
         </div>
 
-        <div class="stats">
+        <!-- Highlights -->
+        <div class="stats-row">
             @foreach ($reportPayload['highlights'] as $highlight)
-                <div class="stat">
-                    <div class="stat-label">{{ $highlight['label'] }}</div>
-                    <div class="stat-value">{{ $formatMetric($highlight['value'], $highlight['format'] ?? $defaultValueFormat) }}</div>
+                <div class="stat-card">
+                    <span class="label">{{ $highlight['label'] }}</span>
+                    <span class="value">{{ $formatMetric($highlight['value'], $highlight['format'] ?? $defaultValueFormat) }}</span>
                 </div>
             @endforeach
         </div>
 
+        <!-- Transactions Table -->
         <table>
             <thead>
                 <tr>
                     @foreach ($reportPayload['columns'] as $column)
-                        <th>{{ $column['label'] }}</th>
+                        <th style="{{ in_array($column['key'], ['debit', 'credit', 'balance']) ? 'text-align: left;' : '' }}">
+                            {{ $column['label'] }}
+                        </th>
                     @endforeach
                 </tr>
             </thead>
@@ -81,26 +276,46 @@
                                 $columnKey = $column['key'];
                                 $columnFormat = $column['format'] ?? ($columnKey === 'meta' ? 'text' : ($row['format'] ?? $defaultValueFormat));
                                 $columnValue = $row[$columnKey] ?? '';
+                                $isNumber = in_array($columnFormat, ['currency', 'number']);
                             @endphp
-                            <td class="{{ in_array($columnFormat, ['currency', 'number'], true) ? 'number-cell' : '' }}">
+                            <td class="{{ $isNumber ? 'number' : '' }} {{ $columnKey === 'balance' ? 'running-balance' : '' }}" 
+                                style="{{ $isNumber ? 'text-align: left;' : '' }}">
                                 {{ $formatMetric($columnValue, $columnFormat) }}
                             </td>
                         @endforeach
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="{{ count($reportPayload['columns']) }}">{{ $reportPayload['empty_message'] }}</td>
+                        <td colspan="{{ count($reportPayload['columns']) }}" style="text-align: center; padding: 40px;">
+                            {{ $reportPayload['empty_message'] }}
+                        </td>
                     </tr>
                 @endforelse
             </tbody>
         </table>
 
-        <div class="footer">هذه النسخة المطبوعة مبنية من نفس بيانات التقرير الظاهرة على الشاشة.</div>
+        <!-- Signatures -->
+        <footer class="doc-footer">
+            <div class="signature-section">
+                <div class="stamp-area">الختم الرسمي</div>
+                <div class="signature-box">
+                    <p>توقيع المحاسب المسئول</p>
+                </div>
+            </div>
+            <div class="signature-section">
+                <div style="height: 100px;"></div> <!-- Spacer -->
+                <div class="signature-box">
+                    <p>اعتماد الإدارة</p>
+                </div>
+            </div>
+        </footer>
     </div>
 
     @if ($printMode ?? false)
         <script>
-            window.addEventListener('load', () => window.print());
+            window.addEventListener('load', () => {
+                setTimeout(() => window.print(), 500);
+            });
         </script>
     @endif
 </body>

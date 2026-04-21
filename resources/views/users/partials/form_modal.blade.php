@@ -32,7 +32,7 @@
 @endphp
 
 <div class="modal fade" id="{{ $modalId }}" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-fullscreen-lg-down modal-dialog-scrollable user-editor-dialog">
+    <div class="modal-dialog modal-xl modal-fullscreen-lg-down user-editor-dialog">
         <div class="modal-content user-editor-modal">
             <div class="modal-header user-editor-header">
                 <div class="user-editor-heading">

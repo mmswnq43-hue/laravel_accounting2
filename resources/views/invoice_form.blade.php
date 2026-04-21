@@ -8,6 +8,7 @@
     $dueDateValue = old('due_date', $isEditingInvoice ? optional($invoice->due_date)->format('Y-m-d') : now()->addDays(30)->format('Y-m-d'));
     $customerIdValue = old('customer_id', $isEditingInvoice ? $invoice->customer_id : null);
     $salesChannelIdValue = old('sales_channel_id', $isEditingInvoice ? $invoice->sales_channel_id : ($defaultSalesChannelId ?? null));
+    $revenueAccountIdValue = old('revenue_account_id', $isEditingInvoice ? $invoice->revenue_account_id : null);
     $paymentStatusValue = old('payment_status', $isEditingInvoice ? match ($invoice->payment_status) { 'paid' => 'full', 'pending' => 'deferred', default => $invoice->payment_status } : 'deferred');
     $paymentAccountIdValue = old('payment_account_id', $isEditingInvoice ? $invoice->payment_account_id : null);
     $paidAmountValue = old('paid_amount', $isEditingInvoice ? number_format((float) $invoice->paid_amount, 2, '.', '') : '0');
@@ -72,6 +73,56 @@
     background: linear-gradient(45deg, #e8f5e8, #f0f8f0);
     margin-top: 20px;
 }
+
+/* Searchable Select Styles */
+.search-wrapper {
+    position: relative;
+}
+.search-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1050;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 0 0 10px 10px;
+    max-height: 250px;
+    overflow-y: auto;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    margin-top: -2px;
+}
+.search-result-item {
+    padding: 10px 15px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+}
+.search-result-item:last-child {
+    border-bottom: none;
+}
+.search-result-item:hover {
+    background: #f8f9ff;
+    color: #667eea;
+}
+.search-result-item .small {
+    font-size: 0.8rem;
+}
+.selected-badge {
+    display: inline-flex;
+    align-items: center;
+    background: #eef2ff;
+    color: #4f46e5;
+    padding: 4px 12px;
+    border-radius: 20px;
+    margin-top: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+.selected-badge .btn-close {
+    font-size: 0.65rem;
+    margin-right: 8px;
+    padding: 0;
+}
 </style>
 @endpush
 
@@ -126,12 +177,22 @@
         <div class="row mb-4">
             <div class="col-md-4 mb-3 mb-md-0">
                 <label class="form-label">العميل *</label>
-                <select name="customer_id" class="form-select" required>
-                    <option value="">اختر العميل</option>
-                    @foreach ($customers as $customer)
-                        <option value="{{ $customer->id }}" {{ (string) $customerIdValue === (string) $customer->id ? 'selected' : '' }}>{{ $customer->name }}</option>
-                    @endforeach
-                </select>
+                <div class="d-flex gap-2 align-items-start">
+                    <div class="search-wrapper flex-grow-1">
+                        <input type="text" id="customerSearchInput" class="form-control" placeholder="ابحث عن عميل بالاسم أو الكود..." autocomplete="off">
+                        <input type="hidden" name="customer_id" id="selectedCustomerId" value="{{ $customerIdValue }}" required>
+                        <div id="customerSearchResults" class="search-results d-none"></div>
+                        <div id="selectedCustomerBadge" class="selected-badge d-none">
+                            <span id="selectedCustomerName"></span>
+                            <button type="button" class="btn-close" id="clearCustomerBtn"></button>
+                        </div>
+                    </div>
+                    @if ($canManageInvoices)
+                        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#quickAddCustomerModal" title="إضافة عميل جديد">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    @endif
+                </div>
             </div>
             <div class="col-md-3 mb-3 mb-md-0">
                 <label class="form-label">تاريخ الفاتورة *</label>
@@ -171,6 +232,16 @@
                     @endforeach
                 </select>
             </div>
+            <div class="col-md-3 mb-3 mb-md-0">
+                <label class="form-label">حساب الإيراد (الافتراضي مبيعات)</label>
+                <select name="revenue_account_id" class="form-select @error('revenue_account_id') is-invalid @enderror">
+                    <option value="">توجيه آلي حسب الصنف</option>
+                    @foreach ($revenueAccounts ?? [] as $account)
+                        <option value="{{ $account->id }}" {{ (string) $revenueAccountIdValue === (string) $account->id ? 'selected' : '' }}>{{ $account->code }} - {{ $account->name_ar ?? $account->name }}</option>
+                    @endforeach
+                </select>
+                @error('revenue_account_id')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
+            </div>
         </div>
 
         <div class="row mb-4">
@@ -205,7 +276,7 @@
 
         <div class="row mb-4">
             <div class="col-md-4">
-                <label class="form-label">مرفق الفاتورة</label>
+                <label class="form-label">مرفق الفاتورة (اختياري)</label>
                 <input type="file" name="attachment" class="form-control @error('attachment') is-invalid @enderror" accept="application/pdf,image/*">
                 @error('attachment')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
                 @if ($isEditingInvoice && $invoice->attachment_path)
@@ -332,6 +403,85 @@
         </div>
     </form>
 </div>
+
+@if ($canManageInvoices)
+    <!-- نافذة إضافة عميل جديد سريع -->
+    <div class="modal fade" id="quickAddCustomerModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">إضافة عميل جديد</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="quickAddCustomerForm">
+                    @csrf
+                    <div class="modal-body">
+                        <div id="quickCustomerErrors" class="alert alert-danger d-none"></div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">الاسم</label>
+                                <input type="text" name="name" class="form-control" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">الاسم بالعربي</label>
+                                <input type="text" name="name_ar" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">الحالة</label>
+                                <select name="is_active" class="form-select">
+                                    <option value="1">نشط</option>
+                                    <option value="0">غير نشط</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">البريد الإلكتروني</label>
+                                <input type="email" name="email" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">الهاتف</label>
+                                <input type="text" name="phone" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">الجوال</label>
+                                <input type="text" name="mobile" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">المدينة</label>
+                                <select name="city" class="form-select">
+                                    <option value="">اختر المدينة</option>
+                                    @foreach ($companyCities as $city)
+                                        <option value="{{ $city }}">{{ $city }}</option>
+                                    @endforeach
+                                </select>
+                                <div class="form-text">الدولة المعتمدة: {{ $companyCountryLabel }}</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">الدولة</label>
+                                <input type="text" class="form-control" value="{{ $companyCountryLabel }}" readonly>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">الرقم الضريبي</label>
+                                <input type="text" name="tax_number" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">الحد الائتماني</label>
+                                <input type="number" name="credit_limit" class="form-control" min="0" step="0.01" value="0" lang="en" dir="ltr">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">العنوان</label>
+                                <textarea name="address" class="form-control" rows="2"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                        <button type="submit" class="btn btn-primary" id="saveQuickCustomerBtn">إضافة العميل</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+@endif
 @endsection
 
 @push('scripts')
@@ -615,5 +765,152 @@ document.querySelectorAll('[data-invoice-form]').forEach((form) => {
     });
     recalculateInvoiceTotals(form);
 });
+
+// مصفوفة العملاء الممررة من الخادم
+let customersList = @json($customers);
+
+const customerSearchInput = document.getElementById('customerSearchInput');
+const customerSearchResults = document.getElementById('customerSearchResults');
+const selectedCustomerId = document.getElementById('selectedCustomerId');
+const selectedCustomerBadge = document.getElementById('selectedCustomerBadge');
+const selectedCustomerName = document.getElementById('selectedCustomerName');
+const clearCustomerBtn = document.getElementById('clearCustomerBtn');
+
+function updateCustomerSelection(customer) {
+    if (customer) {
+        selectedCustomerId.value = customer.id;
+        selectedCustomerName.textContent = customer.name;
+        selectedCustomerBadge.classList.remove('d-none');
+        customerSearchInput.classList.add('d-none');
+        customerSearchInput.value = '';
+        customerSearchResults.classList.add('d-none');
+    } else {
+        selectedCustomerId.value = '';
+        selectedCustomerName.textContent = '';
+        selectedCustomerBadge.classList.add('d-none');
+        customerSearchInput.classList.remove('d-none');
+        customerSearchInput.focus();
+    }
+}
+
+// تهيئة الاختيار الأولي عند التحميل (في حالة التعديل أو العودة ببيانات قديمة)
+if (selectedCustomerId.value) {
+    const existing = customersList.find(c => String(c.id) === String(selectedCustomerId.value));
+    if (existing) {
+        updateCustomerSelection(existing);
+    }
+}
+
+customerSearchInput.addEventListener('input', function() {
+    const query = this.value.toLowerCase().trim();
+    if (query.length < 1) {
+        customerSearchResults.classList.add('d-none');
+        return;
+    }
+
+    const filtered = customersList.filter(c => 
+        c.name.toLowerCase().includes(query) || 
+        (c.name_ar && c.name_ar.toLowerCase().includes(query)) ||
+        (c.code && c.code.toLowerCase().includes(query))
+    ).slice(0, 10);
+
+    if (filtered.length > 0) {
+        customerSearchResults.innerHTML = filtered.map(c => `
+            <div class="search-result-item" data-id="${c.id}">
+                <div class="fw-bold">${c.name}</div>
+                <div class="small text-muted">${c.code || ''} ${c.name_ar ? '| ' + c.name_ar : ''}</div>
+            </div>
+        `).join('');
+        customerSearchResults.classList.remove('d-none');
+    } else {
+        customerSearchResults.innerHTML = '<div class="p-3 text-muted text-center">لا توجد نتائج</div>';
+        customerSearchResults.classList.remove('d-none');
+    }
+});
+
+customerSearchResults.addEventListener('click', function(e) {
+    const item = e.target.closest('.search-result-item');
+    if (item) {
+        const id = item.dataset.id;
+        const customer = customersList.find(c => String(c.id) === String(id));
+        updateCustomerSelection(customer);
+    }
+});
+
+clearCustomerBtn.addEventListener('click', function() {
+    updateCustomerSelection(null);
+});
+
+// إغلاق النتائج عند النقر خارجها
+document.addEventListener('click', function(e) {
+    if (!customerSearchInput.contains(e.target) && !customerSearchResults.contains(e.target)) {
+        customerSearchResults.classList.add('d-none');
+    }
+});
+
+// إضافة عميل جديد عبر AJAX
+const quickAddCustomerForm = document.getElementById('quickAddCustomerForm');
+const quickCustomerErrors = document.getElementById('quickCustomerErrors');
+const quickAddCustomerModal = document.getElementById('quickAddCustomerModal');
+
+if (quickAddCustomerForm) {
+    quickAddCustomerForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const submitBtn = document.getElementById('saveQuickCustomerBtn');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جاري الحفظ...';
+        quickCustomerErrors.classList.add('d-none');
+
+        const formData = new FormData(this);
+
+        fetch("{{ route('customers.store') }}", {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        })
+        .then(response => response.json().then(data => ({ status: response.status, body: data })))
+        .then(({ status, body }) => {
+            if (status === 200 && body.success) {
+                // إضافة العميل الجديد للمصفوفة المحلية
+                customersList.push(body.customer);
+                updateCustomerSelection(body.customer);
+                
+                // إظهار رسالة نجاح
+                const successAlert = document.createElement('div');
+                successAlert.className = 'alert alert-success alert-dismissible fade show mt-3';
+                successAlert.innerHTML = `${body.message} <button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+                document.querySelector('.invoice-form').prepend(successAlert);
+
+                // إغلاق النافذة وتنظيف النموذج
+                const modalInstance = bootstrap.Modal.getInstance(quickAddCustomerModal);
+                modalInstance.hide();
+                quickAddCustomerForm.reset();
+            } else if (status === 422) {
+                let errorHtml = '<ul class="mb-0">';
+                Object.values(body.errors).forEach(errArray => {
+                    errArray.forEach(err => { errorHtml += `<li>${err}</li>`; });
+                });
+                errorHtml += '</ul>';
+                quickCustomerErrors.innerHTML = errorHtml;
+                quickCustomerErrors.classList.remove('d-none');
+            } else {
+                quickCustomerErrors.textContent = 'حدث خطأ غير متوقع. يرجى المحاولة لاحقاً.';
+                quickCustomerErrors.classList.remove('d-none');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            quickCustomerErrors.textContent = 'فشل الاتصال بالخادم.';
+            quickCustomerErrors.classList.remove('d-none');
+        })
+        .finally(() => {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = 'إضافة العميل';
+        });
+    });
+}
 </script>
 @endpush

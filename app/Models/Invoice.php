@@ -20,10 +20,12 @@ class Invoice extends Model
         'branch_id',
         'sales_channel_id',
         'payment_account_id',
+        'revenue_account_id',
         'invoice_date',
         'due_date',
         'subtotal',
         'tax_amount',
+        'tax_type',
         'total',
         'paid_amount',
         'balance_due',
@@ -80,6 +82,11 @@ class Invoice extends Model
     public function paymentAccount(): BelongsTo
     {
         return $this->belongsTo(Account::class, 'payment_account_id');
+    }
+
+    public function revenueAccount(): BelongsTo
+    {
+        return $this->belongsTo(Account::class, 'revenue_account_id');
     }
 
     public function items(): HasMany

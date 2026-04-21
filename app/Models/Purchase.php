@@ -21,6 +21,7 @@ class Purchase extends Model
         'due_date',
         'subtotal',
         'tax_amount',
+        'tax_type',
         'total',
         'paid_amount',
         'balance_due',

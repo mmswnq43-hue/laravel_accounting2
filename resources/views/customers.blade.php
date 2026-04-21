@@ -137,57 +137,91 @@
         </div>
 
         @if ($canManageCustomers)
+            @php
+                $editCustomerModalKey = 'edit-' . $customer->id;
+                $editCustomerModalHasErrors = $errors->any() && $activeCustomerModal === $editCustomerModalKey;
+                $selectedCustomerCity = $editCustomerModalHasErrors ? old('city') : $customer->city;
+                $initials = mb_strtoupper(mb_substr($customer->name ?? '', 0, 1) . mb_substr($customer->name_ar ?? '', 0, 1));
+                if (empty($initials)) $initials = 'CU';
+            @endphp
             <div class="modal fade" id="editCustomerModal{{ $customer->id }}" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog modal-fullscreen-sm-down">
-                    <div class="modal-content">
+                <div class="modal-dialog modal-xl modal-fullscreen-lg-down user-editor-dialog">
+                    <div class="modal-content user-editor-modal">
+                        <div class="modal-header user-editor-header">
+                            <div class="user-editor-heading">
+                                <div class="user-editor-avatar">{{ $initials }}</div>
+                                <div>
+                                    <div class="user-editor-eyebrow">تحديث بيانات العميل</div>
+                                    <h5 class="modal-title mb-1">{{ $customer->name }}</h5>
+                                    <p class="user-editor-subtitle mb-0">عدّل معلومات الاتصال، العنوان، والحد الائتماني للعميل.</p>
+                                </div>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
                         <form method="POST" action="{{ route('customers.update', $customer) }}">
                             @csrf
                             @method('PUT')
                             <input type="hidden" name="customer_modal" value="{{ $editCustomerModalKey }}">
-                            <div class="modal-header">
-                                <h5 class="modal-title">تعديل العميل {{ $customer->name }}</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                            </div>
-                            <div class="modal-body">
-                                @if ($editCustomerModalHasErrors)
-                                    <div class="alert alert-danger">
-                                        <ul class="mb-0 ps-3">
-                                            @foreach ($errors->all() as $error)
-                                                <li>{{ $error }}</li>
-                                            @endforeach
-                                        </ul>
+                            <div class="modal-body user-editor-body">
+                                <div class="user-editor-overview">
+                                    <div class="user-editor-overview-item">
+                                        <span class="user-editor-overview-label">الرصيد الحالي</span>
+                                        <strong class="{{ $customer->balance >= 0 ? 'text-success' : 'text-danger' }}">{{ number_format($customer->balance, 2) }} {{ $company->currency }}</strong>
                                     </div>
-                                @endif
-                                <div class="row g-3">
-                                    <div class="col-md-6"><label class="form-label">الاسم</label><input type="text" name="name" class="form-control" value="{{ $editCustomerModalHasErrors ? old('name') : $customer->name }}" required></div>
-                                    <div class="col-md-6"><label class="form-label">الاسم بالعربي</label><input type="text" name="name_ar" class="form-control" value="{{ $editCustomerModalHasErrors ? old('name_ar') : $customer->name_ar }}"></div>
-                                    <div class="col-md-6"><label class="form-label">الكود</label><input type="text" name="code" class="form-control" value="{{ $editCustomerModalHasErrors ? old('code') : $customer->code }}"></div>
-                                    <div class="col-md-6"><label class="form-label">الحالة</label><select name="is_active" class="form-select"><option value="1" {{ (string) ($editCustomerModalHasErrors ? old('is_active', $customer->is_active ? '1' : '0') : ($customer->is_active ? '1' : '0')) === '1' ? 'selected' : '' }}>نشط</option><option value="0" {{ (string) ($editCustomerModalHasErrors ? old('is_active', $customer->is_active ? '1' : '0') : ($customer->is_active ? '1' : '0')) === '0' ? 'selected' : '' }}>غير نشط</option></select></div>
-                                    <div class="col-md-6"><label class="form-label">البريد الإلكتروني</label><input type="email" name="email" class="form-control" value="{{ $editCustomerModalHasErrors ? old('email') : $customer->email }}"></div>
-                                    <div class="col-md-6"><label class="form-label">الهاتف</label><input type="text" name="phone" class="form-control" value="{{ $editCustomerModalHasErrors ? old('phone') : $customer->phone }}"></div>
-                                    <div class="col-md-6"><label class="form-label">الجوال</label><input type="text" name="mobile" class="form-control" value="{{ $editCustomerModalHasErrors ? old('mobile') : $customer->mobile }}"></div>
-                                    <div class="col-md-6">
-                                        <label class="form-label">المدينة</label>
-                                        <select name="city" class="form-select">
-                                            <option value="">اختر المدينة</option>
-                                            @foreach ($companyCities as $city)
-                                                <option value="{{ $city }}" {{ $selectedCustomerCity === $city ? 'selected' : '' }}>{{ $city }}</option>
-                                            @endforeach
-                                            @if ($selectedCustomerCity && ! $companyCities->contains($selectedCustomerCity))
-                                                <option value="{{ $selectedCustomerCity }}" selected>{{ $selectedCustomerCity }}</option>
-                                            @endif
-                                        </select>
-                                        <div class="form-text">الدولة المعتمدة: {{ $companyCountryLabel }}</div>
+                                    <div class="user-editor-overview-item">
+                                        <span class="user-editor-overview-label">حد الائتمان</span>
+                                        <strong>{{ number_format($customer->credit_limit, 2) }} {{ $company->currency }}</strong>
                                     </div>
-                                    <div class="col-md-6"><label class="form-label">الدولة</label><input type="text" class="form-control" value="{{ $companyCountryLabel }}" readonly></div>
-                                    <div class="col-md-6"><label class="form-label">الرقم الضريبي</label><input type="text" name="tax_number" class="form-control" value="{{ $editCustomerModalHasErrors ? old('tax_number') : $customer->tax_number }}"></div>
-                                    <div class="col-md-6"><label class="form-label">الحد الائتماني</label><input type="number" name="credit_limit" class="form-control" min="0" step="0.01" value="{{ $editCustomerModalHasErrors ? old('credit_limit') : $customer->credit_limit }}" lang="en" dir="ltr"></div>
-                                    <div class="col-12"><label class="form-label">العنوان</label><textarea name="address" class="form-control" rows="2">{{ $editCustomerModalHasErrors ? old('address') : $customer->address }}</textarea></div>
+                                    <div class="user-editor-overview-item">
+                                        <span class="user-editor-overview-label">المدينة</span>
+                                        <strong>{{ $customer->city ?: 'غير محدد' }}</strong>
+                                    </div>
+                                    <div class="user-editor-overview-item">
+                                        <span class="user-editor-overview-label">الحالة</span>
+                                        <strong>{{ $customer->is_active ? 'نشط' : 'غير نشط' }}</strong>
+                                    </div>
+                                </div>
+
+                                <div class="user-editor-panel-highlight p-4 rounded-4 bg-white border">
+                                    @if ($editCustomerModalHasErrors)
+                                        <div class="alert alert-danger mb-4">
+                                            <ul class="mb-0 ps-3">
+                                                @foreach ($errors->all() as $error)
+                                                    <li>{{ $error }}</li>
+                                                @endforeach
+                                            </ul>
+                                        </div>
+                                    @endif
+                                    <div class="row g-3">
+                                        <div class="col-md-6"><label class="form-label">الاسم</label><input type="text" name="name" class="form-control" value="{{ $editCustomerModalHasErrors ? old('name') : $customer->name }}" required></div>
+                                        <div class="col-md-6"><label class="form-label">الاسم بالعربي</label><input type="text" name="name_ar" class="form-control" value="{{ $editCustomerModalHasErrors ? old('name_ar') : $customer->name_ar }}"></div>
+                                        <div class="col-md-6"><label class="form-label">الكود</label><input type="text" name="code" class="form-control" value="{{ $editCustomerModalHasErrors ? old('code') : $customer->code }}"></div>
+                                        <div class="col-md-6"><label class="form-label">الحالة</label><select name="is_active" class="form-select"><option value="1" {{ (string) ($editCustomerModalHasErrors ? old('is_active', $customer->is_active ? '1' : '0') : ($customer->is_active ? '1' : '0')) === '1' ? 'selected' : '' }}>نشط</option><option value="0" {{ (string) ($editCustomerModalHasErrors ? old('is_active', $customer->is_active ? '1' : '0') : ($customer->is_active ? '1' : '0')) === '0' ? 'selected' : '' }}>غير نشط</option></select></div>
+                                        <div class="col-md-6"><label class="form-label">البريد الإلكتروني</label><input type="email" name="email" class="form-control" value="{{ $editCustomerModalHasErrors ? old('email') : $customer->email }}"></div>
+                                        <div class="col-md-6"><label class="form-label">الهاتف</label><input type="text" name="phone" class="form-control" value="{{ $editCustomerModalHasErrors ? old('phone') : $customer->phone }}"></div>
+                                        <div class="col-md-6"><label class="form-label">الجوال</label><input type="text" name="mobile" class="form-control" value="{{ $editCustomerModalHasErrors ? old('mobile') : $customer->mobile }}"></div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">المدينة</label>
+                                            <select name="city" class="form-select">
+                                                <option value="">اختر المدينة</option>
+                                                @foreach ($companyCities as $city)
+                                                    <option value="{{ $city }}" {{ $selectedCustomerCity === $city ? 'selected' : '' }}>{{ $city }}</option>
+                                                @endforeach
+                                                @if ($selectedCustomerCity && ! $companyCities->contains($selectedCustomerCity))
+                                                    <option value="{{ $selectedCustomerCity }}" selected>{{ $selectedCustomerCity }}</option>
+                                                @endif
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6"><label class="form-label">الدولة</label><input type="text" class="form-control" value="{{ $companyCountryLabel }}" readonly></div>
+                                        <div class="col-md-6"><label class="form-label">الرقم الضريبي</label><input type="text" name="tax_number" class="form-control" value="{{ $editCustomerModalHasErrors ? old('tax_number') : $customer->tax_number }}"></div>
+                                        <div class="col-md-6"><label class="form-label">الحد الائتماني</label><input type="number" name="credit_limit" class="form-control" min="0" step="0.01" value="{{ $editCustomerModalHasErrors ? old('credit_limit') : $customer->credit_limit }}" lang="en" dir="ltr"></div>
+                                        <div class="col-12"><label class="form-label">العنوان</label><textarea name="address" class="form-control" rows="2">{{ $editCustomerModalHasErrors ? old('address') : $customer->address }}</textarea></div>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                                <button type="submit" class="btn btn-primary">حفظ التعديلات</button>
+                            <div class="modal-footer user-editor-footer">
+                                <button type="button" class="btn btn-light user-editor-cancel" data-bs-dismiss="modal">إلغاء</button>
+                                <button type="submit" class="btn btn-primary user-editor-submit">حفظ التعديلات</button>
                             </div>
                         </form>
                     </div>
@@ -210,52 +244,78 @@
 
 @if ($canManageCustomers)
     <div class="modal fade" id="addCustomerModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-fullscreen-sm-down">
-            <div class="modal-content">
+        <div class="modal-dialog modal-xl modal-fullscreen-lg-down user-editor-dialog">
+            <div class="modal-content user-editor-modal">
+                <div class="modal-header user-editor-header">
+                    <div class="user-editor-heading">
+                        <div class="user-editor-avatar">CU</div>
+                        <div>
+                            <div class="user-editor-eyebrow">إضافة عضو جديد للشبكة</div>
+                            <h5 class="modal-title mb-1">إضافة عميل جديد</h5>
+                            <p class="user-editor-subtitle mb-0">أنشئ ملفًا تعريفيًا للعميل لربطه بعمليات البيع المباشر والمؤجل.</p>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
                 <form method="POST" action="{{ route('customers.store') }}">
                     @csrf
                     <input type="hidden" name="customer_modal" value="create">
-                    <div class="modal-header">
-                        <h5 class="modal-title">إضافة عميل جديد</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        @if ($createCustomerModalHasErrors)
-                            <div class="alert alert-danger">
-                                <ul class="mb-0 ps-3">
-                                    @foreach ($errors->all() as $error)
-                                        <li>{{ $error }}</li>
-                                    @endforeach
-                                </ul>
+                    <div class="modal-body user-editor-body">
+                        <div class="user-editor-overview">
+                            <div class="user-editor-overview-item">
+                                <span class="user-editor-overview-label">الرصيد الابتدائي</span>
+                                <strong>0.00 {{ $company->currency }}</strong>
                             </div>
-                        @endif
-                        <div class="row g-3">
-                            <div class="col-md-6"><label class="form-label">الاسم</label><input type="text" name="name" class="form-control" value="{{ old('name') }}" required></div>
-                            <div class="col-md-6"><label class="form-label">الاسم بالعربي</label><input type="text" name="name_ar" class="form-control" value="{{ old('name_ar') }}"></div>
-                            <div class="col-md-6"><label class="form-label">الكود</label><input type="text" name="code" class="form-control" value="{{ old('code') }}" placeholder="يُنشأ تلقائيًا إذا تُرك فارغًا"></div>
-                            <div class="col-md-6"><label class="form-label">الحالة</label><select name="is_active" class="form-select"><option value="1" {{ old('is_active', '1') === '1' ? 'selected' : '' }}>نشط</option><option value="0" {{ old('is_active') === '0' ? 'selected' : '' }}>غير نشط</option></select></div>
-                            <div class="col-md-6"><label class="form-label">البريد الإلكتروني</label><input type="email" name="email" class="form-control" value="{{ old('email') }}"></div>
-                            <div class="col-md-6"><label class="form-label">الهاتف</label><input type="text" name="phone" class="form-control" value="{{ old('phone') }}"></div>
-                            <div class="col-md-6"><label class="form-label">الجوال</label><input type="text" name="mobile" class="form-control" value="{{ old('mobile') }}"></div>
-                            <div class="col-md-6">
-                                <label class="form-label">المدينة</label>
-                                <select name="city" class="form-select">
-                                    <option value="">اختر المدينة</option>
-                                    @foreach ($companyCities as $city)
-                                        <option value="{{ $city }}" {{ old('city') === $city ? 'selected' : '' }}>{{ $city }}</option>
-                                    @endforeach
-                                </select>
-                                <div class="form-text">الدولة المعتمدة: {{ $companyCountryLabel }}</div>
+                            <div class="user-editor-overview-item">
+                                <span class="user-editor-overview-label">حد الائتمان المقترح</span>
+                                <strong>0.00 {{ $company->currency }}</strong>
                             </div>
-                            <div class="col-md-6"><label class="form-label">الدولة</label><input type="text" class="form-control" value="{{ $companyCountryLabel }}" readonly></div>
-                            <div class="col-md-6"><label class="form-label">الرقم الضريبي</label><input type="text" name="tax_number" class="form-control" value="{{ old('tax_number') }}"></div>
-                            <div class="col-md-6"><label class="form-label">الحد الائتماني</label><input type="number" name="credit_limit" class="form-control" min="0" step="0.01" value="{{ old('credit_limit', 0) }}" lang="en" dir="ltr"></div>
-                            <div class="col-12"><label class="form-label">العنوان</label><textarea name="address" class="form-control" rows="2">{{ old('address') }}</textarea></div>
+                            <div class="user-editor-overview-item">
+                                <span class="user-editor-overview-label">المنطقة</span>
+                                <strong>{{ $companyCountryLabel }}</strong>
+                            </div>
+                            <div class="user-editor-overview-item">
+                                <span class="user-editor-overview-label">الحالة</span>
+                                <strong>جديد</strong>
+                            </div>
+                        </div>
+
+                        <div class="user-editor-panel-highlight p-4 rounded-4 bg-white border">
+                            @if ($createCustomerModalHasErrors)
+                                <div class="alert alert-danger mb-4">
+                                    <ul class="mb-0 ps-3">
+                                        @foreach ($errors->all() as $error)
+                                            <li>{{ $error }}</li>
+                                        @endforeach
+                                    </ul>
+                                </div>
+                            @endif
+                            <div class="row g-3">
+                                <div class="col-md-6"><label class="form-label">الاسم</label><input type="text" name="name" class="form-control" value="{{ old('name') }}" required></div>
+                                <div class="col-md-6"><label class="form-label">الاسم بالعربي</label><input type="text" name="name_ar" class="form-control" value="{{ old('name_ar') }}"></div>
+                                <div class="col-md-6"><label class="form-label">الحالة</label><select name="is_active" class="form-select"><option value="1" {{ old('is_active', '1') === '1' ? 'selected' : '' }}>نشط</option><option value="0" {{ old('is_active') === '0' ? 'selected' : '' }}>غير نشط</option></select></div>
+                                <div class="col-md-6"><label class="form-label">البريد الإلكتروني</label><input type="email" name="email" class="form-control" value="{{ old('email') }}"></div>
+                                <div class="col-md-6"><label class="form-label">الهاتف</label><input type="text" name="phone" class="form-control" value="{{ old('phone') }}"></div>
+                                <div class="col-md-6"><label class="form-label">الجوال</label><input type="text" name="mobile" class="form-control" value="{{ old('mobile') }}"></div>
+                                <div class="col-md-6">
+                                    <label class="form-label">المدينة</label>
+                                    <select name="city" class="form-select">
+                                        <option value="">اختر المدينة</option>
+                                        @foreach ($companyCities as $city)
+                                            <option value="{{ $city }}" {{ old('city') === $city ? 'selected' : '' }}>{{ $city }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="col-md-6"><label class="form-label">الدولة</label><input type="text" class="form-control" value="{{ $companyCountryLabel }}" readonly></div>
+                                <div class="col-md-6"><label class="form-label">الرقم الضريبي</label><input type="text" name="tax_number" class="form-control" value="{{ old('tax_number') }}"></div>
+                                <div class="col-md-6"><label class="form-label">الحد الائتماني</label><input type="number" name="credit_limit" class="form-control" min="0" step="0.01" value="{{ old('credit_limit', 0) }}" lang="en" dir="ltr"></div>
+                                <div class="col-12"><label class="form-label">العنوان</label><textarea name="address" class="form-control" rows="2">{{ old('address') }}</textarea></div>
+                            </div>
                         </div>
                     </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                        <button type="submit" class="btn btn-primary">إضافة العميل</button>
+                    <div class="modal-footer user-editor-footer">
+                        <button type="button" class="btn btn-light user-editor-cancel" data-bs-dismiss="modal">إلغاء</button>
+                        <button type="submit" class="btn btn-primary user-editor-submit">إضافة العميل</button>
                     </div>
                 </form>
             </div>

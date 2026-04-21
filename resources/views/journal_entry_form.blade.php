@@ -63,14 +63,31 @@
     color: #28a745;
     font-weight: 700;
 }
+
+/* Select2 overrides for Bootstrap 5 */
+.select2-container .select2-selection--single {
+    height: 48px;
+    border-radius: 10px;
+    border: 2px solid #e0e0e0;
+    padding: 8px 12px;
+}
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 28px;
+    color: #495057;
+}
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 46px;
+    right: 10px;
+}
 </style>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 @endpush
 
 @section('content')
 <div class="page-header">
     <div>
-        <h2 class="page-title"><i class="fas fa-book-medical"></i> إنشاء قيد محاسبي جديد</h2>
-        <p class="text-muted mt-2 mb-0">إضافة قيد يومي يدوي بنفس هيكلة صفحة Flask الأصلية</p>
+        <h2 class="page-title"><i class="fas fa-book-medical"></i> {{ isset($journalEntry) ? 'تعديل مسودة القيد' : 'إنشاء قيد محاسبي جديد' }}</h2>
+        <p class="text-muted mt-2 mb-0">{{ isset($journalEntry) ? 'تعديل قيد يدوي غير مرحل' : 'إضافة قيد يومي يدوي بنفس هيكلة صفحة Flask الأصلية' }}</p>
     </div>
     <a href="{{ route('journal_entries') }}" class="btn btn-outline-secondary">
         <i class="fas fa-arrow-right ms-2"></i>العودة للقيود
@@ -79,17 +96,26 @@
 
 <div class="journal-form">
     @php
-        $manualLines = collect(old('line_account', ['', '']))->map(function ($accountId, $index) {
-            return (object) [
-                'account_id' => $accountId,
-                'description' => old('line_description.' . $index),
-                'debit' => old('line_debit.' . $index, 0),
-                'credit' => old('line_credit.' . $index, 0),
-            ];
-        });
+        if (old('line_account')) {
+            $manualLines = collect(old('line_account'))->map(function ($accountId, $index) {
+                return (object) [
+                    'account_id' => $accountId,
+                    'description' => old('line_description.' . $index),
+                    'debit' => old('line_debit.' . $index, 0),
+                    'credit' => old('line_credit.' . $index, 0),
+                ];
+            });
+        } elseif (isset($journalEntry)) {
+            $manualLines = $journalEntry->lines;
+        } else {
+            $manualLines = collect([(object)['account_id'=>'', 'description'=>'', 'debit'=>0, 'credit'=>0], (object)['account_id'=>'', 'description'=>'', 'debit'=>0, 'credit'=>0]]);
+        }
     @endphp
-    <form method="POST" action="{{ route('journal_entries.store') }}" data-journal-form>
+    <form method="POST" action="{{ isset($journalEntry) ? route('journal_entries.update', $journalEntry) : route('journal_entries.store') }}" data-journal-form>
         @csrf
+        @if(isset($journalEntry))
+            @method('PUT')
+        @endif
         <div class="row mb-4">
             <div class="col-md-3 mb-3 mb-md-0">
                 <label class="form-label">رقم القيد</label>
@@ -97,7 +123,7 @@
             </div>
             <div class="col-md-3 mb-3 mb-md-0">
                 <label class="form-label">التاريخ *</label>
-                <input type="date" name="entry_date" class="form-control" value="{{ old('entry_date', now()->format('Y-m-d')) }}" required>
+                <input type="date" name="entry_date" class="form-control" value="{{ old('entry_date', isset($journalEntry) ? \Carbon\Carbon::parse($journalEntry->entry_date)->format('Y-m-d') : now()->format('Y-m-d')) }}" required>
             </div>
             <div class="col-md-3 mb-3 mb-md-0">
                 <label class="form-label">المرجع</label>
@@ -106,7 +132,7 @@
             </div>
             <div class="col-md-3">
                 <label class="form-label">الوصف *</label>
-                <input type="text" name="description" class="form-control" placeholder="وصف القيد" value="{{ old('description') }}" required>
+                <input type="text" name="description" class="form-control" placeholder="وصف القيد" value="{{ old('description', $journalEntry->description ?? '') }}" required>
             </div>
         </div>
 
@@ -119,7 +145,7 @@
                         <div class="row align-items-center">
                             <div class="col-md-4 mb-3 mb-md-0">
                                 <label class="form-label">الحساب *</label>
-                                <select name="line_account[]" class="form-select">
+                                <select name="line_account[]" class="form-select select2-account">
                                     <option value="">اختر الحساب</option>
                                     @foreach ($accounts as $account)
                                         <option value="{{ $account->id }}" {{ (string) $line->account_id === (string) $account->id ? 'selected' : '' }}>{{ $account->code }} - {{ $account->name }}</option>
@@ -192,7 +218,18 @@
 @endsection
 
 @push('scripts')
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
+function initSelect2(element) {
+    $(element).select2({
+        placeholder: "ابحث بالاسم أو الكود للحساب",
+        allowClear: true,
+        width: '100%',
+        dir: 'rtl'
+    });
+}
+
 function recalculateJournalBalance(form) {
     let totalDebit = 0;
     let totalCredit = 0;
@@ -223,6 +260,12 @@ function bindJournalLine(row, form) {
 
     row.querySelector('.remove-line')?.addEventListener('click', () => {
         if (form.querySelectorAll('[data-journal-line-row]').length > 2) {
+            // Destroy select2 before removing to prevent memory leaks
+            const selectEl = row.querySelector('.select2-account');
+            if (selectEl && $(selectEl).hasClass("select2-hidden-accessible")) {
+                $(selectEl).select2('destroy');
+            }
+            
             row.remove();
             recalculateJournalBalance(form);
         }
@@ -235,24 +278,76 @@ function addJournalLine(form) {
     if (!firstRow || !container) {
         return;
     }
+    
+    // Destroy select2 on original row temporarily before cloning if needed, 
+    // or just clone and strip select2 classes
+    
+    const selectToClone = firstRow.querySelector('.select2-account');
+    const wasSelect2 = $(selectToClone).hasClass("select2-hidden-accessible");
+    if (wasSelect2) {
+        $(selectToClone).select2('destroy');
+    }
 
     const clone = firstRow.cloneNode(true);
+    
+    // Restore select2 on original row
+    if (wasSelect2) {
+        initSelect2(selectToClone);
+    }
+
+    // Clean up clone
+    clone.querySelectorAll('.select2-container').forEach(e => e.remove());
+    clone.querySelectorAll('select').forEach((select) => {
+        select.classList.remove('select2-hidden-accessible');
+        select.removeAttribute('data-select2-id');
+        select.selectedIndex = 0;
+    });
+    
     clone.querySelectorAll('input').forEach((input) => {
         input.value = input.classList.contains('line-debit') || input.classList.contains('line-credit') ? '0' : '';
     });
-    clone.querySelectorAll('select').forEach((select) => {
-        select.selectedIndex = 0;
-    });
 
     container.appendChild(clone);
+    initSelect2(clone.querySelector('.select2-account'));
+    
     bindJournalLine(clone, form);
     recalculateJournalBalance(form);
+    
+    // Focus the new select if possible
+    $(clone.querySelector('.select2-account')).select2('open');
 }
 
 document.querySelectorAll('[data-journal-form]').forEach((form) => {
+    // Init Select2 on all existing rows
+    form.querySelectorAll('.select2-account').forEach(select => initSelect2(select));
+
     form.querySelectorAll('[data-journal-line-row]').forEach((row) => bindJournalLine(row, form));
-    form.querySelector('#addJournalLine')?.addEventListener('click', () => addJournalLine(form));
+    
+    const addBtn = form.querySelector('#addJournalLine');
+    if(addBtn) {
+        addBtn.addEventListener('click', () => addJournalLine(form));
+    }
     recalculateJournalBalance(form);
+});
+
+// Keyboard Shortcuts
+document.addEventListener('keydown', function(event) {
+    // Ctrl + S (Save)
+    if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+        event.preventDefault();
+        const form = document.querySelector('[data-journal-form]');
+        if (form && document.querySelector('.btn-save')) {
+            form.submit();
+        }
+    }
+    // Ctrl + E or Ctrl + Enter (Add Line)
+    if ((event.ctrlKey || event.metaKey) && (event.key === 'e' || event.key === 'Enter')) {
+        event.preventDefault();
+        const form = document.querySelector('[data-journal-form]');
+        if(form && document.querySelector('#addJournalLine')) {
+            addJournalLine(form);
+        }
+    }
 });
 </script>
 @endpush

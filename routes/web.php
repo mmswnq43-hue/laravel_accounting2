@@ -74,6 +74,7 @@ Route::middleware(['auth', 'password.change', 'company'])->group(function () {
     Route::middleware('permission:manage_products')->group(function () {
         Route::get('/products', [AccountingPageController::class, 'products'])->name('products');
         Route::post('/products', [AccountingPageController::class, 'storeProduct'])->name('products.store');
+        Route::post('/products/import', [AccountingPageController::class, 'importProducts'])->name('products.import');
         Route::put('/products/{product}', [AccountingPageController::class, 'updateProduct'])->name('products.update');
         Route::delete('/products/{product}', [AccountingPageController::class, 'destroyProduct'])->name('products.destroy');
     });
@@ -93,8 +94,13 @@ Route::middleware(['auth', 'password.change', 'company'])->group(function () {
     Route::middleware('permission:manage_journal_entries')->group(function () {
         Route::get('/journal-entries', [AccountingPageController::class, 'journalEntries'])->name('journal_entries');
         Route::get('/journal-entries/create', [AccountingPageController::class, 'journalEntryCreate'])->name('journal_entries.create');
+        Route::get('/journal-entries/export', [AccountingPageController::class, 'journalEntryExport'])->name('journal_entries.export');
         Route::post('/journal-entries', [AccountingPageController::class, 'storeJournalEntry'])->name('journal_entries.store');
         Route::get('/journal-entries/{journalEntry}', [AccountingPageController::class, 'journalEntryShow'])->name('journal_entries.show');
+        Route::get('/journal-entries/{journalEntry}/edit', [AccountingPageController::class, 'journalEntryEdit'])->name('journal_entries.edit');
+        Route::put('/journal-entries/{journalEntry}', [AccountingPageController::class, 'journalEntryUpdate'])->name('journal_entries.update');
+        Route::delete('/journal-entries/{journalEntry}', [AccountingPageController::class, 'journalEntryDestroy'])->name('journal_entries.destroy');
+        Route::post('/journal-entries/{journalEntry}/post', [AccountingPageController::class, 'journalEntryPost'])->name('journal_entries.post');
     });
 
     Route::middleware('permission:view_reports')->group(function () {

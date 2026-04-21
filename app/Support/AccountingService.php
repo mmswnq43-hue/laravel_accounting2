@@ -25,7 +25,10 @@ class AccountingService
 
     public function syncInvoiceEntry(Invoice $invoice, User $user): JournalEntry
     {
-        $invoice->loadMissing(['items.product', 'customer.account', 'paymentAccount']);
+        $invoice->loadMissing(['items.product', 'customer.account', 'paymentAccount', 'revenueAccount']);
+
+        // حساب الإيراد المخصص للفاتورة (لو موجود يستخدم بدلاً من حسابات الإيراد الخاصة بكل منتج)
+        $invoiceRevenueAccount = $invoice->revenueAccount;
 
         $lines = collect();
         $paidAmount = $this->normalizeAmount(min((float) $invoice->paid_amount, (float) $invoice->total));
@@ -59,9 +62,12 @@ class AccountingService
             $sellingPrice = $this->normalizeAmount((float) $item->quantity * (float) $item->unit_price);
 
             if ($sellingPrice > 0) {
+                // استخدم حساب الإيراد المخصص للفاتورة إذا وجد، وإلا استخدم حساب المنتج
+                $revenueAccount = $invoiceRevenueAccount
+                    ?? $this->revenueAccountForProduct($item->product, (int) $invoice->company_id);
                 $this->pushLine(
                     $lines,
-                    $this->revenueAccountForProduct($item->product, (int) $invoice->company_id),
+                    $revenueAccount,
                     'إثبات الإيراد للفاتورة ' . $invoice->invoice_number . ' - ' . ($item->product?->name ?? ''),
                     0,
                     $sellingPrice,
@@ -301,7 +307,7 @@ class AccountingService
             'source_id' => null,
             'entry_type' => 'manual',
             'entry_origin' => 'manual',
-            'status' => 'posted',
+            'status' => 'draft',
             'total_debit' => $totals['debit'],
             'total_credit' => $totals['credit'],
             'company_id' => $companyId,
@@ -318,8 +324,9 @@ class AccountingService
                 'debit' => $line['debit'],
                 'credit' => $line['credit'],
             ]);
-
-            $line['account']->updateBalance((float) $line['debit'], (float) $line['credit']);
+            
+            // We do NOT update the account balances here since the entry is in draft status.
+            // Balances will be updated when the entry is posted.
         }
 
         return $entry->fresh(['lines.account']);

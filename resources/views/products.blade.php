@@ -21,6 +21,9 @@
             </a>
         @endif
         @if ($canManageProducts)
+            <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#importProductModal">
+                <i class="fas fa-file-excel ms-1"></i> استيراد الإكسل
+            </button>
             <button type="button" class="btn btn-gradient" data-bs-toggle="modal" data-bs-target="#addProductModal">
                 <i class="fas fa-plus ms-1"></i> إضافة منتج جديد
             </button>
@@ -101,46 +104,76 @@
             @php
                 $editModalKey = 'edit-' . $product->id;
                 $editModalHasErrors = $errors->any() && $activeProductModal === $editModalKey;
+                $initials = mb_strtoupper(mb_substr($product->name ?? '', 0, 1) . mb_substr($product->name_ar ?? '', 0, 1));
+                if (empty($initials)) $initials = 'PR';
             @endphp
             <div class="modal fade" id="editProductModal{{ $product->id }}" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog modal-lg modal-fullscreen-sm-down">
-                    <div class="modal-content">
+                <div class="modal-dialog modal-xl modal-fullscreen-lg-down user-editor-dialog">
+                    <div class="modal-content user-editor-modal">
+                        <div class="modal-header user-editor-header">
+                            <div class="user-editor-heading">
+                                <div class="user-editor-avatar">{{ $initials }}</div>
+                                <div>
+                                    <div class="user-editor-eyebrow">تحديث بيانات المنتج</div>
+                                    <h5 class="modal-title mb-1">{{ $product->name }}</h5>
+                                    <p class="user-editor-subtitle mb-0">عدّل مواصفات المنتج، الأسعار، والمخزون المتاح.</p>
+                                </div>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
                         <form method="POST" action="{{ route('products.update', $product) }}">
                             @csrf
                             @method('PUT')
                             <input type="hidden" name="product_modal" value="{{ $editModalKey }}">
-                            <div class="modal-header">
-                                <h5 class="modal-title">تعديل المنتج</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                            </div>
-                            <div class="modal-body">
-                                @if ($editModalHasErrors)
-                                    <div class="alert alert-danger">
-                                        <ul class="mb-0 ps-3">
-                                            @foreach ($errors->all() as $error)
-                                                <li>{{ $error }}</li>
-                                            @endforeach
-                                        </ul>
+                            <div class="modal-body user-editor-body">
+                                <div class="user-editor-overview">
+                                    <div class="user-editor-overview-item">
+                                        <span class="user-editor-overview-label">الوضع</span>
+                                        <strong>تعديل منتج</strong>
                                     </div>
-                                @endif
-                                <div class="row g-3">
-                                    <div class="col-md-6"><label class="form-label">الاسم</label><input type="text" name="name" class="form-control" value="{{ $editModalHasErrors ? old('name') : $product->name }}" required></div>
-                                    <div class="col-md-6"><label class="form-label">الاسم بالعربي</label><input type="text" name="name_ar" class="form-control" value="{{ $editModalHasErrors ? old('name_ar') : $product->name_ar }}"></div>
-                                    <div class="col-md-4"><label class="form-label">الكود</label><input type="text" name="code" class="form-control" value="{{ $editModalHasErrors ? old('code') : $product->code }}"></div>
-                                    <div class="col-md-4"><label class="form-label">المورد</label><select name="supplier_id" class="form-select"><option value="">بدون مورد</option>@foreach ($suppliers as $supplier)<option value="{{ $supplier->id }}" {{ (string) ($editModalHasErrors ? old('supplier_id') : $product->supplier_id) === (string) $supplier->id ? 'selected' : '' }}>{{ $supplier->name }}</option>@endforeach</select></div>
-                                    <div class="col-md-4"><label class="form-label">النوع</label><select name="type" class="form-select"><option value="product" {{ ($editModalHasErrors ? old('type') : $product->type) === 'product' ? 'selected' : '' }}>منتج</option><option value="service" {{ ($editModalHasErrors ? old('type') : $product->type) === 'service' ? 'selected' : '' }}>خدمة</option></select></div>
-                                    <div class="col-md-4"><label class="form-label">الوحدة</label><input type="text" name="unit" class="form-control" value="{{ $editModalHasErrors ? old('unit') : $product->unit }}"></div>
-                                    <div class="col-md-4"><label class="form-label">سعر التكلفة</label><input type="number" name="cost_price" class="form-control" min="0" step="0.01" value="{{ $editModalHasErrors ? old('cost_price') : $product->cost_price }}" lang="en" dir="ltr"></div>
-                                    <div class="col-md-4"><label class="form-label">سعر البيع</label><input type="number" name="sell_price" class="form-control" min="0" step="0.01" value="{{ $editModalHasErrors ? old('sell_price') : $product->sell_price }}" lang="en" dir="ltr"></div>
-                                    <div class="col-md-4"><label class="form-label">الضريبة %</label><input type="number" name="tax_rate" class="form-control" min="0" max="100" step="0.01" value="{{ $editModalHasErrors ? old('tax_rate') : $product->tax_rate }}" lang="en" dir="ltr"></div>
-                                    <div class="col-md-6"><label class="form-label">المخزون الحالي</label><input type="number" name="stock_quantity" class="form-control" min="0" step="0.01" value="{{ $editModalHasErrors ? old('stock_quantity') : $product->stock_quantity }}" lang="en" dir="ltr"></div>
-                                    <div class="col-md-6"><label class="form-label">الحد الأدنى للمخزون</label><input type="number" name="min_stock" class="form-control" min="0" step="0.01" value="{{ $editModalHasErrors ? old('min_stock') : $product->min_stock }}" lang="en" dir="ltr"></div>
-                                    <div class="col-12"><label class="form-label">الوصف</label><textarea name="description" class="form-control" rows="3">{{ $editModalHasErrors ? old('description') : $product->description }}</textarea></div>
+                                    <div class="user-editor-overview-item">
+                                        <span class="user-editor-overview-label">المخزون الحالي</span>
+                                        <strong>{{ $product->stock_quantity ?? 0 }} {{ $product->unit ?? 'وحدة' }}</strong>
+                                    </div>
+                                    <div class="user-editor-overview-item">
+                                        <span class="user-editor-overview-label">سعر البيع</span>
+                                        <strong>{{ number_format($product->sell_price, 2) }} {{ $company->currency }}</strong>
+                                    </div>
+                                    <div class="user-editor-overview-item">
+                                        <span class="user-editor-overview-label">النوع</span>
+                                        <strong>{{ $product->type === 'service' ? 'خدمة' : 'منتج' }}</strong>
+                                    </div>
+                                </div>
+
+                                <div class="user-editor-panel-highlight p-4 rounded-4 bg-white border">
+                                    @if ($editModalHasErrors)
+                                        <div class="alert alert-danger mb-4">
+                                            <ul class="mb-0 ps-3">
+                                                @foreach ($errors->all() as $error)
+                                                    <li>{{ $error }}</li>
+                                                @endforeach
+                                            </ul>
+                                        </div>
+                                    @endif
+                                    <div class="row g-3">
+                                        <div class="col-md-6"><label class="form-label">الاسم</label><input type="text" name="name" class="form-control" value="{{ $editModalHasErrors ? old('name') : $product->name }}" required></div>
+                                        <div class="col-md-6"><label class="form-label">الاسم بالعربي</label><input type="text" name="name_ar" class="form-control" value="{{ $editModalHasErrors ? old('name_ar') : $product->name_ar }}"></div>
+                                        <div class="col-md-4"><label class="form-label">الكود</label><input type="text" name="code" class="form-control" value="{{ $editModalHasErrors ? old('code') : $product->code }}"></div>
+                                        <div class="col-md-4"><label class="form-label">المورد</label><select name="supplier_id" class="form-select"><option value="">بدون مورد</option>@foreach ($suppliers as $supplier)<option value="{{ $supplier->id }}" {{ (string) ($editModalHasErrors ? old('supplier_id') : $product->supplier_id) === (string) $supplier->id ? 'selected' : '' }}>{{ $supplier->name }}</option>@endforeach</select></div>
+                                        <div class="col-md-4"><label class="form-label">النوع</label><select name="type" class="form-select"><option value="product" {{ ($editModalHasErrors ? old('type') : $product->type) === 'product' ? 'selected' : '' }}>منتج</option><option value="service" {{ ($editModalHasErrors ? old('type') : $product->type) === 'service' ? 'selected' : '' }}>خدمة</option></select></div>
+                                        <div class="col-md-4"><label class="form-label">الوحدة</label><input type="text" name="unit" class="form-control" value="{{ $editModalHasErrors ? old('unit') : $product->unit }}"></div>
+                                        <div class="col-md-4"><label class="form-label">سعر التكلفة</label><input type="number" name="cost_price" class="form-control" min="0" step="0.01" value="{{ $editModalHasErrors ? old('cost_price') : $product->cost_price }}" lang="en" dir="ltr"></div>
+                                        <div class="col-md-4"><label class="form-label">سعر البيع</label><input type="number" name="sell_price" class="form-control" min="0" step="0.01" value="{{ $editModalHasErrors ? old('sell_price') : $product->sell_price }}" lang="en" dir="ltr"></div>
+                                        <div class="col-md-4"><label class="form-label">الضريبة %</label><input type="number" name="tax_rate" class="form-control" min="0" max="100" step="0.01" value="{{ $editModalHasErrors ? old('tax_rate') : $product->tax_rate }}" lang="en" dir="ltr"></div>
+                                        <div class="col-md-6"><label class="form-label">المخزون الحالي</label><input type="number" name="stock_quantity" class="form-control" min="0" step="0.01" value="{{ $editModalHasErrors ? old('stock_quantity') : $product->stock_quantity }}" lang="en" dir="ltr"></div>
+                                        <div class="col-md-6"><label class="form-label">الحد الأدنى للمخزون</label><input type="number" name="min_stock" class="form-control" min="0" step="0.01" value="{{ $editModalHasErrors ? old('min_stock') : $product->min_stock }}" lang="en" dir="ltr"></div>
+                                        <div class="col-12"><label class="form-label">الوصف</label><textarea name="description" class="form-control" rows="3">{{ $editModalHasErrors ? old('description') : $product->description }}</textarea></div>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                                <button type="submit" class="btn btn-primary">حفظ التعديلات</button>
+                            <div class="modal-footer user-editor-footer">
+                                <button type="button" class="btn btn-light user-editor-cancel" data-bs-dismiss="modal">إلغاء</button>
+                                <button type="submit" class="btn btn-primary user-editor-submit">حفظ التعديلات</button>
                             </div>
                         </form>
                     </div>
@@ -163,43 +196,99 @@
 
 @if ($canManageProducts)
     <div class="modal fade" id="addProductModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-fullscreen-sm-down">
-            <div class="modal-content">
+        <div class="modal-dialog modal-xl modal-fullscreen-lg-down user-editor-dialog">
+            <div class="modal-content user-editor-modal">
+                <div class="modal-header user-editor-header">
+                    <div class="user-editor-heading">
+                        <div class="user-editor-avatar">PR</div>
+                        <div>
+                            <div class="user-editor-eyebrow">إضافة عضو جديد إلى الكتلوج</div>
+                            <h5 class="modal-title mb-1">إضافة منتج جديد</h5>
+                            <p class="user-editor-subtitle mb-0">أنشئ منتجًا أو خدمة جديدة بترميز فريد وتفاصيل مالية دقيقة.</p>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
                 <form method="POST" action="{{ route('products.store') }}">
                     @csrf
                     <input type="hidden" name="product_modal" value="create">
-                    <div class="modal-header">
-                    <h5 class="modal-title">إضافة منتج جديد</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                    @if ($createProductModalHasErrors)
-                        <div class="alert alert-danger">
-                            <ul class="mb-0 ps-3">
-                                @foreach ($errors->all() as $error)
-                                    <li>{{ $error }}</li>
-                                @endforeach
-                            </ul>
+                    <div class="modal-body user-editor-body">
+                        <div class="user-editor-overview">
+                            <div class="user-editor-overview-item">
+                                <span class="user-editor-overview-label">الوضع</span>
+                                <strong>إضافة منتج</strong>
+                            </div>
+                            <div class="user-editor-overview-item">
+                                <span class="user-editor-overview-label">المخزون الابتدائي</span>
+                                <strong>0 وحدة</strong>
+                            </div>
+                            <div class="user-editor-overview-item">
+                                <span class="user-editor-overview-label">سعر البيع</span>
+                                <strong>0.00 {{ $company->currency }}</strong>
+                            </div>
+                            <div class="user-editor-overview-item">
+                                <span class="user-editor-overview-label">الحالة</span>
+                                <strong>جديد</strong>
+                            </div>
                         </div>
-                    @endif
-                    <div class="row g-3">
-                        <div class="col-md-6"><label class="form-label">الاسم</label><input type="text" name="name" class="form-control" value="{{ old('name') }}" required></div>
-                        <div class="col-md-6"><label class="form-label">الاسم بالعربي</label><input type="text" name="name_ar" class="form-control" value="{{ old('name_ar') }}"></div>
-                        <div class="col-md-4"><label class="form-label">الكود</label><input type="text" name="code" class="form-control" value="{{ old('code') }}" placeholder="يُنشأ تلقائياً إذا تركته فارغاً"></div>
-                        <div class="col-md-4"><label class="form-label">المورد</label><select name="supplier_id" class="form-select"><option value="">بدون مورد</option>@foreach ($suppliers as $supplier)<option value="{{ $supplier->id }}" {{ (string) old('supplier_id') === (string) $supplier->id ? 'selected' : '' }}>{{ $supplier->name }}</option>@endforeach</select></div>
-                        <div class="col-md-4"><label class="form-label">النوع</label><select name="type" class="form-select"><option value="product" {{ old('type') === 'product' ? 'selected' : '' }}>منتج</option><option value="service" {{ old('type') === 'service' ? 'selected' : '' }}>خدمة</option></select></div>
-                        <div class="col-md-4"><label class="form-label">الوحدة</label><input type="text" name="unit" class="form-control" value="{{ old('unit', 'وحدة') }}"></div>
-                        <div class="col-md-4"><label class="form-label">سعر التكلفة</label><input type="number" name="cost_price" class="form-control" min="0" step="0.01" value="{{ old('cost_price', 0) }}" lang="en" dir="ltr"></div>
-                        <div class="col-md-4"><label class="form-label">سعر البيع</label><input type="number" name="sell_price" class="form-control" min="0" step="0.01" value="{{ old('sell_price', 0) }}" lang="en" dir="ltr"></div>
-                        <div class="col-md-4"><label class="form-label">الضريبة %</label><input type="number" name="tax_rate" class="form-control" min="0" max="100" step="0.01" value="{{ old('tax_rate', 15) }}" lang="en" dir="ltr"></div>
-                        <div class="col-md-6"><label class="form-label">المخزون الحالي</label><input type="number" name="stock_quantity" class="form-control" min="0" step="0.01" value="{{ old('stock_quantity', 0) }}" lang="en" dir="ltr"></div>
-                        <div class="col-md-6"><label class="form-label">الحد الأدنى للمخزون</label><input type="number" name="min_stock" class="form-control" min="0" step="0.01" value="{{ old('min_stock', 0) }}" lang="en" dir="ltr"></div>
-                        <div class="col-12"><label class="form-label">الوصف</label><textarea name="description" class="form-control" rows="3">{{ old('description') }}</textarea></div>
+
+                        <div class="user-editor-panel-highlight p-4 rounded-4 bg-white border">
+                            @if ($createProductModalHasErrors)
+                                <div class="alert alert-danger mb-4">
+                                    <ul class="mb-0 ps-3">
+                                        @foreach ($errors->all() as $error)
+                                            <li>{{ $error }}</li>
+                                        @endforeach
+                                    </ul>
+                                </div>
+                            @endif
+                            <div class="row g-3">
+                                <div class="col-md-6"><label class="form-label">الاسم</label><input type="text" name="name" class="form-control" value="{{ old('name') }}" required></div>
+                                <div class="col-md-6"><label class="form-label">الاسم بالعربي</label><input type="text" name="name_ar" class="form-control" value="{{ old('name_ar') }}"></div>
+
+                                <div class="col-md-4"><label class="form-label">المورد</label><select name="supplier_id" class="form-select"><option value="">بدون مورد</option>@foreach ($suppliers as $supplier)<option value="{{ $supplier->id }}" {{ (string) old('supplier_id') === (string) $supplier->id ? 'selected' : '' }}>{{ $supplier->name }}</option>@endforeach</select></div>
+                                <div class="col-md-4"><label class="form-label">النوع</label><select name="type" class="form-select"><option value="product" {{ old('type') === 'product' ? 'selected' : '' }}>منتج</option><option value="service" {{ old('type') === 'service' ? 'selected' : '' }}>خدمة</option></select></div>
+                                <div class="col-md-4"><label class="form-label">الوحدة</label><input type="text" name="unit" class="form-control" value="{{ old('unit', 'وحدة') }}"></div>
+                                <div class="col-md-4"><label class="form-label">سعر التكلفة</label><input type="number" name="cost_price" class="form-control" min="0" step="0.01" value="{{ old('cost_price', 0) }}" lang="en" dir="ltr"></div>
+                                <div class="col-md-4"><label class="form-label">سعر البيع</label><input type="number" name="sell_price" class="form-control" min="0" step="0.01" value="{{ old('sell_price', 0) }}" lang="en" dir="ltr"></div>
+                                <div class="col-md-4"><label class="form-label">الضريبة %</label><input type="number" name="tax_rate" class="form-control" min="0" max="100" step="0.01" value="{{ old('tax_rate', 15) }}" lang="en" dir="ltr"></div>
+                                <div class="col-md-6"><label class="form-label">المخزون الحالي</label><input type="number" name="stock_quantity" class="form-control" min="0" step="0.01" value="{{ old('stock_quantity', 0) }}" lang="en" dir="ltr"></div>
+                                <div class="col-md-6"><label class="form-label">الحد الأدنى للمخزون</label><input type="number" name="min_stock" class="form-control" min="0" step="0.01" value="{{ old('min_stock', 0) }}" lang="en" dir="ltr"></div>
+                                <div class="col-12"><label class="form-label">الوصف</label><textarea name="description" class="form-control" rows="3">{{ old('description') }}</textarea></div>
+                            </div>
+                        </div>
                     </div>
+                    <div class="modal-footer user-editor-footer">
+                        <button type="button" class="btn btn-light user-editor-cancel" data-bs-dismiss="modal">إلغاء</button>
+                        <button type="submit" class="btn btn-primary user-editor-submit">إضافة منتج</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="importProductModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-md">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">استيراد المنتجات من ملف Excel</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST" action="{{ route('products.import') }}" enctype="multipart/form-data">
+                    @csrf
+                    <div class="modal-body">
+                        <div class="alert alert-info py-2 mb-4">
+                            <strong>الأعمدة المطلوبة المدعومة (إنجليزي أو عربي):</strong><br>
+                            الكود (code), الاسم (name), النوع (type), سعر التكلفة (cost_price), سعر البيع (selling_price).
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">ملف الإكسل أو CSV</label>
+                            <input type="file" name="excel_file" class="form-control" accept=".xlsx,.xls,.csv" required>
+                        </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                        <button type="submit" class="btn btn-primary">إضافة منتج</button>
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">إلغاء</button>
+                        <button type="submit" class="btn btn-success"><i class="fas fa-cloud-upload-alt ms-1"></i> بدء الاستيراد</button>
                     </div>
                 </form>
             </div>

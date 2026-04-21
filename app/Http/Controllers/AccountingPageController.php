@@ -41,7 +41,8 @@ use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
-
+use App\Imports\ProductsImport;
+use Maatwebsite\Excel\Facades\Excel;
 class AccountingPageController extends Controller
 {
     public function __construct(
@@ -136,6 +137,7 @@ class AccountingPageController extends Controller
                 'branch_id' => $salesContext['branch_id'],
                 'sales_channel_id' => $validated['sales_channel_id'],
                 'payment_account_id' => $validated['payment_account_id'] ?? null,
+                'revenue_account_id' => $validated['revenue_account_id'] ?? null,
                 'invoice_date' => $validated['invoice_date'],
                 'due_date' => $validated['due_date'] ?? null,
                 'subtotal' => $totals['subtotal'],
@@ -211,6 +213,7 @@ class AccountingPageController extends Controller
                 'branch_id' => $salesContext['branch_id'],
                 'sales_channel_id' => $validated['sales_channel_id'],
                 'payment_account_id' => $validated['payment_account_id'] ?? null,
+                'revenue_account_id' => $validated['revenue_account_id'] ?? null,
                 'subtotal' => $totals['subtotal'],
                 'tax_amount' => $totals['tax_amount'],
                 'total' => $totals['total'],
@@ -427,7 +430,7 @@ class AccountingPageController extends Controller
             $this->syncPurchaseItems($purchase, $validated);
 
             if ($this->shouldReceivePurchaseStock((string) $purchase->status)) {
-                $this->applyPurchaseStock($company->id, $this->purchaseStockRequirementsFromValidated($validated));
+                $this->applyPurchaseStock($company->id, $this->purchaseStockRequirementsFromItems($purchase->fresh()->items));
             }
 
             $freshPurchase = $purchase->fresh(['items.product', 'supplier', 'paymentAccount']);
@@ -451,11 +454,17 @@ class AccountingPageController extends Controller
         $products = Product::forCompany($company->id)->active()->orderBy('name')->get();
         $paymentAccounts = $this->directPaymentAccounts($company->id);
 
+        $companyCountry = $this->countryConfigForCompany($company);
+        $companyCities = collect($companyCountry['cities'] ?? []);
+        $companyCountryLabel = $companyCountry['name_ar'] ?? ($company->country_code ?? 'غير محدد');
+
         return view('purchases.create', [
             'company' => $company,
             'suppliers' => $suppliers,
             'products' => $products,
             'paymentAccounts' => $paymentAccounts,
+            'companyCountryLabel' => $companyCountryLabel,
+            'companyCities' => $companyCities,
         ]);
     }
 
@@ -531,7 +540,7 @@ class AccountingPageController extends Controller
             $this->syncPurchaseItems($purchase, $validated);
 
             if ($this->shouldReceivePurchaseStock((string) $purchase->status)) {
-                $this->applyPurchaseStock($company->id, $this->purchaseStockRequirementsFromValidated($validated));
+                $this->applyPurchaseStock($company->id, $this->purchaseStockRequirementsFromItems($purchase->fresh()->items));
             }
 
             $freshPurchase = $purchase->fresh(['items.product', 'supplier', 'paymentAccount']);
@@ -794,7 +803,7 @@ class AccountingPageController extends Controller
         $company = $this->company($request);
         $validated = $this->validateCustomerData($request, $company->id);
 
-        DB::transaction(function () use ($validated, $company) {
+        $customer = DB::transaction(function () use ($validated, $company) {
             $customer = Customer::create($this->customerPayload($validated, $company));
 
             if (!$customer->code) {
@@ -804,7 +813,17 @@ class AccountingPageController extends Controller
             }
 
             $this->chartOfAccountsSynchronizer->syncCustomerAccount($customer->fresh());
+            
+            return $customer;
         });
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'تمت إضافة العميل بنجاح.',
+                'customer' => $customer
+            ]);
+        }
 
         return redirect()->route('customers')->with('status', 'تمت إضافة العميل بنجاح.');
     }
@@ -893,12 +912,12 @@ class AccountingPageController extends Controller
         return view('supplier_show', compact('company', 'supplier', 'suggestedPaymentReference', 'companyCountry', 'sortDirection', 'paymentAccounts'));
     }
 
-    public function storeSupplier(Request $request): RedirectResponse
+    public function storeSupplier(Request $request)
     {
         $company = $this->company($request);
         $validated = $this->validateSupplierData($request, $company->id);
 
-        DB::transaction(function () use ($validated, $company) {
+        $supplier = DB::transaction(function () use ($validated, $company) {
             $supplier = Supplier::create($this->supplierPayload($validated, $company));
 
             if (!$supplier->code) {
@@ -908,7 +927,17 @@ class AccountingPageController extends Controller
             }
 
             $this->chartOfAccountsSynchronizer->syncSupplierAccount($supplier->fresh());
+
+            return $supplier;
         });
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'تمت إضافة المورد بنجاح.',
+                'supplier' => $supplier
+            ]);
+        }
 
         return redirect()->route('suppliers')->with('status', 'تمت إضافة المورد بنجاح.');
     }
@@ -1174,6 +1203,27 @@ class AccountingPageController extends Controller
         });
 
         return redirect()->route('expenses')->with('status', 'تم حذف المصروف وعكس القيد المحاسبي المرتبط به.');
+    }
+
+    public function importProducts(Request $request): RedirectResponse
+    {
+        $company = $this->company($request);
+
+        $request->validate([
+            'excel_file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'], // 10MB max
+        ]);
+
+        try {
+            $import = new ProductsImport($company->id);
+            Excel::import($import, $request->file('excel_file'));
+            
+            return redirect()->route('products')->with(
+                'status', 
+                "تم استيراد المنتجات بنجاح. منتجات جديدة: {$import->importedCount} | منتجات تم تحديثها: {$import->updatedCount}"
+            );
+        } catch (\Exception $e) {
+            return redirect()->route('products')->with('error', 'حدث خطأ أثناء الاستيراد: ' . $e->getMessage());
+        }
     }
 
     public function storeProduct(Request $request): RedirectResponse
@@ -1514,9 +1564,9 @@ class AccountingPageController extends Controller
             }
         }
 
-        Account::create([
+        $account = Account::create([
             'company_id' => $company->id,
-            'code' => $validated['code'],
+            'code' => $validated['code'] ?? '',
             'name' => $validated['name'],
             'name_ar' => $validated['name_ar'] ?? null,
             'account_type' => $validated['account_type'],
@@ -1527,6 +1577,19 @@ class AccountingPageController extends Controller
             'is_system' => false,
             'balance' => 0,
         ]);
+
+        if (!$account->code) {
+            $prefix = match($validated['account_type']) {
+                'asset' => '1',
+                'liability' => '2',
+                'equity' => '3',
+                'revenue' => '4',
+                'expense' => '5',
+                'cogs' => '6',
+                default => '9'
+            };
+            $account->update(['code' => $prefix . str_pad((string) $account->id, 4, '0', STR_PAD_LEFT)]);
+        }
 
         return redirect()->route('chart_of_accounts')->with('status', 'تمت إضافة الحساب بنجاح.');
     }
@@ -1641,6 +1704,67 @@ class AccountingPageController extends Controller
         return redirect()->route('journal_entries.show', $entry)->with('status', 'تم إنشاء القيد اليدوي وترحيله بنجاح.');
     }
 
+    public function journalEntryExport(Request $request)
+    {
+        $company = $this->company($request);
+        
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:255'],
+            'status' => ['nullable', Rule::in(['draft', 'posted', 'reversed'])],
+            'account_id' => ['nullable', 'integer'],
+            'date_from' => ['nullable', 'date'],
+            'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
+            'sort_direction' => ['nullable', Rule::in(['asc', 'desc'])],
+        ]);
+
+        $search = trim((string) ($validated['search'] ?? ''));
+        $status = $validated['status'] ?? null;
+        $accountId = $validated['account_id'] ?? null;
+        $dateFrom = $validated['date_from'] ?? null;
+        $dateTo = $validated['date_to'] ?? null;
+        $sortDirection = $validated['sort_direction'] ?? 'desc';
+
+        $query = JournalEntry::where('company_id', $company->id)
+            ->with(['lines.account']);
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('entry_number', 'like', '%' . $search . '%')
+                    ->orWhere('description', 'like', '%' . $search . '%')
+                    ->orWhere('reference', 'like', '%' . $search . '%');
+            });
+        }
+
+        if ($status) {
+            $query->where('status', $status);
+        }
+
+        if ($dateFrom) {
+            $query->whereDate('entry_date', '>=', $dateFrom);
+        }
+
+        if ($dateTo) {
+            $query->whereDate('entry_date', '<=', $dateTo);
+        }
+
+        if ($accountId) {
+            $query->whereHas('lines', function ($q) use ($accountId) {
+                $q->where('account_id', $accountId);
+            });
+        }
+
+        $entries = $query->orderBy('entry_date', $sortDirection)
+            ->orderBy('id', $sortDirection)
+            ->get();
+
+        $fileName = 'قيود_اليومية_' . $company->name . '_' . now()->format('Y-m-d') . '.xlsx';
+        
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\JournalEntriesExport($entries, $company->name, $company->currency),
+            $fileName
+        );
+    }
+
     public function journalEntryShow(Request $request, JournalEntry $journalEntry): View
     {
         $company = $this->company($request);
@@ -1649,7 +1773,115 @@ class AccountingPageController extends Controller
         $journalEntry->load(['lines.account', 'creator', 'poster']);
         $sourceContext = $this->journalEntrySourceContext($journalEntry);
 
+        if ($request->boolean('print')) {
+            return view('journal_entry_print', compact('company', 'journalEntry', 'sourceContext'));
+        }
+
         return view('journal_entry_show', compact('company', 'journalEntry', 'sourceContext'));
+    }
+
+    public function journalEntryEdit(Request $request, JournalEntry $journalEntry): View
+    {
+        $company = $this->company($request);
+        abort_if((int) $journalEntry->company_id !== (int) $company->id, 404);
+        abort_if($journalEntry->status !== 'draft' || $journalEntry->entry_origin !== 'manual', 403, 'لا يمكن تعديل القيود الآلية أو المُرحلة.');
+
+        $journalEntry->load('lines');
+        
+        $accounts = Account::where('company_id', $company->id)
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get();
+
+        $nextEntryNumber = $journalEntry->entry_number;
+        $suggestedJournalReference = $journalEntry->reference;
+
+        return view('journal_entry_form', compact('company', 'accounts', 'nextEntryNumber', 'suggestedJournalReference', 'journalEntry'));
+    }
+
+    public function journalEntryUpdate(Request $request, JournalEntry $journalEntry): RedirectResponse
+    {
+        $company = $this->company($request);
+        abort_if((int) $journalEntry->company_id !== (int) $company->id, 404);
+        abort_if($journalEntry->status !== 'draft' || $journalEntry->entry_origin !== 'manual', 403, 'لا يمكن تعديل القيود الآلية أو المُرحلة.');
+
+        $validated = $this->validateJournalEntryData($request, $company->id);
+        $lines = $this->normalizeJournalLines($validated, $company->id);
+
+        try {
+            DB::transaction(function () use ($journalEntry, $validated, $lines) {
+                $debit = round((float) $lines->sum('debit'), 2);
+                $credit = round((float) $lines->sum('credit'), 2);
+                
+                if ($debit <= 0 || $credit <= 0 || abs($debit - $credit) > 0.009) {
+                    throw new \RuntimeException('القيد المحاسبي غير متوازن.');
+                }
+                
+                $journalEntry->update([
+                    'entry_date' => $validated['entry_date'],
+                    'reference' => trim((string) ($validated['reference'] ?? '')) ?: null,
+                    'description' => $validated['description'],
+                    'total_debit' => $debit,
+                    'total_credit' => $credit,
+                ]);
+
+                $journalEntry->lines()->delete();
+
+                foreach ($lines as $line) {
+                    $journalEntry->lines()->create([
+                        'account_id' => $line['account']->id,
+                        'description' => $line['description'],
+                        'debit' => $line['debit'],
+                        'credit' => $line['credit'],
+                    ]);
+                }
+            });
+        } catch (\Throwable $exception) {
+            return redirect()
+                ->back()
+                ->withInput()
+                ->with('error', $exception->getMessage() ?: 'تعذر تحديث القيد المحاسبي.');
+        }
+
+        return redirect()->route('journal_entries.show', $journalEntry)->with('status', 'تم تحديث مسودة القيد بنجاح.');
+    }
+
+    public function journalEntryDestroy(Request $request, JournalEntry $journalEntry): RedirectResponse
+    {
+        $company = $this->company($request);
+        abort_if((int) $journalEntry->company_id !== (int) $company->id, 404);
+        abort_if($journalEntry->status !== 'draft' || $journalEntry->entry_origin !== 'manual', 403, 'لا يمكن حذف القيود الآلية أو المُرحلة.');
+
+        DB::transaction(function () use ($journalEntry) {
+            $journalEntry->lines()->delete();
+            $journalEntry->delete();
+        });
+
+        return redirect()->route('journal_entries')->with('status', 'تم حذف القيد بنجاح.');
+    }
+
+    public function journalEntryPost(Request $request, JournalEntry $journalEntry): RedirectResponse
+    {
+        $company = $this->company($request);
+        abort_if((int) $journalEntry->company_id !== (int) $company->id, 404);
+        abort_if($journalEntry->status !== 'draft', 403, 'هذا القيد مُرحل مسبقاً.');
+
+        DB::transaction(function () use ($journalEntry, $request) {
+            $journalEntry->update([
+                'status' => 'posted',
+                'posted_by' => $request->user()->id,
+                'posted_at' => now(),
+            ]);
+
+            // التأثير على أرصدة الحسابات
+            foreach ($journalEntry->lines as $line) {
+                if ($line->account) {
+                    $line->account->updateBalance((float) $line->debit, (float) $line->credit);
+                }
+            }
+        });
+
+        return redirect()->route('journal_entries.show', $journalEntry)->with('status', 'تم ترحيل القيد بنجاح والتأثير في الميزانية.');
     }
 
     public function operationsActivityReport(Request $request): View
@@ -1862,6 +2094,8 @@ class AccountingPageController extends Controller
                 Rule::requiredIf(fn() => $request->input('period') === 'custom'),
                 'after_or_equal:date_from',
             ],
+            'account_id' => ['nullable', 'exists:accounts,id'],
+            'customer_id' => ['nullable', 'exists:customers,id'],
         ]);
 
         $selectedPeriod = $validated['period'] ?? config('accounting.reports.default_period', 'monthly');
@@ -1871,7 +2105,19 @@ class AccountingPageController extends Controller
             $validated['date_to'] ?? null,
         );
 
-        $reportPayload = $this->buildInteractiveReportResponse($company, $report, $dateFrom, $dateTo);
+        $filters = [
+            'account_id' => $validated['account_id'] ?? null,
+            'customer_id' => $validated['customer_id'] ?? null,
+        ];
+        $reportPayload = $this->buildInteractiveReportResponse($company, $report, $dateFrom, $dateTo, $filters);
+
+        if ($request->input('export') === 'excel' && $report === 'customer_statement' && isset($filters['customer_id'])) {
+            $customer = Customer::where('company_id', $company->id)->findOrFail($filters['customer_id']);
+            return \Maatwebsite\Excel\Facades\Excel::download(
+                new \App\Exports\CustomerStatementExport($reportPayload, $company, $customer, $reportPayload['date_range_label']),
+                "statement_{$customer->name}_{$reportPayload['date_range_label']}.xlsx"
+            );
+        }
 
         if ($request->boolean('print')) {
             return view('reports_show_print', [
@@ -1897,6 +2143,10 @@ class AccountingPageController extends Controller
             'selectedPeriod' => $selectedPeriod,
             'dateFrom' => $dateFrom,
             'dateTo' => $dateTo,
+            'accounts' => Account::where('company_id', $company->id)->where('is_active', true)->orderBy('code')->get(),
+            'customers' => Customer::where('company_id', $company->id)->orderBy('name')->get(),
+            'selectedAccountId' => $validated['account_id'] ?? null,
+            'selectedCustomerId' => $validated['customer_id'] ?? null,
         ]);
     }
 
@@ -1920,6 +2170,8 @@ class AccountingPageController extends Controller
                 Rule::requiredIf(fn() => $request->input('period') === 'custom'),
                 'after_or_equal:date_from',
             ],
+            'account_id' => ['nullable', 'exists:accounts,id'],
+            'customer_id' => ['nullable', 'exists:customers,id'],
         ]);
 
         $selectedPeriod = $validated['period'] ?? config('accounting.reports.default_period', 'monthly');
@@ -1929,7 +2181,11 @@ class AccountingPageController extends Controller
             $validated['date_to'] ?? null,
         );
 
-        return response()->json($this->buildInteractiveReportResponse($company, $validated['report'], $dateFrom, $dateTo));
+        $filters = [
+            'account_id' => $validated['account_id'] ?? null,
+            'customer_id' => $validated['customer_id'] ?? null,
+        ];
+        return response()->json($this->buildInteractiveReportResponse($company, $validated['report'], $dateFrom, $dateTo, $filters));
     }
 
     private function legacyReportsViewData(Request $request, Company $company): array
@@ -2089,36 +2345,47 @@ class AccountingPageController extends Controller
         };
     }
 
-    private function buildInteractiveReportResponse(Company $company, string $reportKey, Carbon $dateFrom, Carbon $dateTo): array
+    private function buildInteractiveReportResponse(Company $company, string $reportKey, Carbon $dateFrom, Carbon $dateTo, array $filters = []): array
     {
         $catalog = $this->interactiveReportCatalog();
         $meta = $catalog[$reportKey];
 
         $report = match ($reportKey) {
-            'sales_by_location' => $this->salesByLocationInteractiveReport($company, $dateFrom, $dateTo),
-            'sales_by_invoice' => $this->salesByInvoiceInteractiveReport($company, $dateFrom, $dateTo),
-            'sales_by_category' => $this->salesByCategoryInteractiveReport($company, $dateFrom, $dateTo),
-            'sales_by_employee' => $this->salesByEmployeeInteractiveReport($company, $dateFrom, $dateTo),
-            'sales_by_payment_status' => $this->salesByPaymentStatusInteractiveReport($company, $dateFrom, $dateTo),
-            'customer_transactions' => $this->customerTransactionsInteractiveReport($company, $dateFrom, $dateTo),
-            'sales_by_channel' => $this->salesByChannelInteractiveReport($company, $dateFrom, $dateTo),
-            'sales_by_customer' => $this->salesByCustomerInteractiveReport($company, $dateFrom, $dateTo),
-            'transactions_by_branch' => $this->transactionsByBranchInteractiveReport($company, $dateFrom, $dateTo),
-            'customer_product_sales' => $this->customerProductSalesInteractiveReport($company, $dateFrom, $dateTo),
-            'sales_by_period' => $this->salesByPeriodInteractiveReport($company, $dateFrom, $dateTo),
-            'customer_statement' => $this->customerStatementInteractiveReport($company, $dateFrom, $dateTo),
-            'tax_return' => $this->taxReturnInteractiveReport($company, $dateFrom, $dateTo),
-            'warehouse_coverage' => $this->warehouseCoverageInteractiveReport($company),
-            'warehouse_incoming' => $this->warehouseIncomingInteractiveReport($company, $dateFrom, $dateTo),
-            'warehouse_suppliers' => $this->warehouseSuppliersInteractiveReport($company, $dateFrom, $dateTo),
+            'sales_by_location' => $this->salesByLocationInteractiveReport($company, $dateFrom, $dateTo, $filters),
+            'sales_by_invoice' => $this->salesByInvoiceInteractiveReport($company, $dateFrom, $dateTo, $filters),
+            'sales_by_category' => $this->salesByCategoryInteractiveReport($company, $dateFrom, $dateTo, $filters),
+            'sales_by_employee' => $this->salesByEmployeeInteractiveReport($company, $dateFrom, $dateTo, $filters),
+            'sales_by_payment_status' => $this->salesByPaymentStatusInteractiveReport($company, $dateFrom, $dateTo, $filters),
+            'customer_transactions' => $this->customerTransactionsInteractiveReport($company, $dateFrom, $dateTo, $filters),
+            'sales_by_channel' => $this->salesByChannelInteractiveReport($company, $dateFrom, $dateTo, $filters),
+            'sales_by_customer' => $this->salesByCustomerInteractiveReport($company, $dateFrom, $dateTo, $filters),
+            'transactions_by_branch' => $this->transactionsByBranchInteractiveReport($company, $dateFrom, $dateTo, $filters),
+            'customer_product_sales' => $this->customerProductSalesInteractiveReport($company, $dateFrom, $dateTo, $filters),
+            'sales_by_period' => $this->salesByPeriodInteractiveReport($company, $dateFrom, $dateTo, $filters),
+            'customer_statement' => $this->customerStatementInteractiveReport($company, $dateFrom, $dateTo, $filters),
+            'tax_return' => $this->taxReturnInteractiveReport($company, $dateFrom, $dateTo, $filters),
+            'warehouse_coverage' => $this->warehouseCoverageInteractiveReport($company, $filters),
+            'warehouse_incoming' => $this->warehouseIncomingInteractiveReport($company, $dateFrom, $dateTo, $filters),
+            'warehouse_suppliers' => $this->warehouseSuppliersInteractiveReport($company, $dateFrom, $dateTo, $filters),
             'finance_income_statement' => $this->interactiveFromLegacy($this->incomeStatementReport($company, $dateFrom, $dateTo)),
-            'finance_receivables' => $this->interactiveFromLegacy($this->receivablesReport($company, [], $dateFrom, $dateTo)),
-            'finance_payables' => $this->interactiveFromLegacy($this->payablesReport($company, [], $dateFrom, $dateTo)),
-            'finance_expenses' => $this->interactiveFromLegacy($this->expenseDetailsReport($company, [], $dateFrom, $dateTo)),
-            default => $this->interactiveFromLegacy($this->accountBalancesReport($company, [], $dateFrom, $dateTo)),
+            'finance_balance_sheet' => $this->interactiveFromLegacy($this->balanceSheetReport($company, $dateFrom, $dateTo)),
+            'finance_trial_balance' => $this->interactiveFromLegacy($this->trialBalanceReport($company, $dateFrom, $dateTo)),
+            'finance_receivables' => $this->interactiveFromLegacy($this->receivablesReport($company, $filters, $dateFrom, $dateTo)),
+            'finance_payables' => $this->interactiveFromLegacy($this->payablesReport($company, $filters, $dateFrom, $dateTo)),
+            'finance_expenses' => $this->interactiveFromLegacy($this->expenseDetailsReport($company, $filters, $dateFrom, $dateTo)),
+            default => $this->interactiveFromLegacy($this->accountBalancesReport($company, $filters, $dateFrom, $dateTo)),
         };
 
-        return array_merge($report, [
+        $columns = $report['columns'] ?? [
+            ['key' => 'label', 'label' => 'البند'],
+            ['key' => 'meta', 'label' => 'التفاصيل'],
+            ['key' => 'value', 'label' => 'القيمة', 'format' => 'currency'],
+        ];
+
+        return array_merge([
+            'insight' => '',
+            'supported' => true,
+        ], $report, [
             'key' => $reportKey,
             'section' => $meta['section'],
             'title' => $meta['title'],
@@ -2126,11 +2393,7 @@ class AccountingPageController extends Controller
             'query_preview' => $meta['query_preview'],
             'value_format' => $report['value_format'] ?? 'currency',
             'date_range_label' => sprintf('من %s إلى %s', $dateFrom->format('Y-m-d'), $dateTo->format('Y-m-d')),
-            'columns' => $report['columns'] ?? [
-                ['key' => 'label', 'label' => 'البند'],
-                ['key' => 'meta', 'label' => 'التفاصيل'],
-                ['key' => 'value', 'label' => 'القيمة', 'format' => 'currency'],
-            ],
+            'columns' => $columns,
         ]);
     }
 
@@ -2666,83 +2929,156 @@ class AccountingPageController extends Controller
         return $report;
     }
 
-    private function customerStatementInteractiveReport(Company $company, Carbon $dateFrom, Carbon $dateTo): array
+    private function customerStatementInteractiveReport(Company $company, Carbon $dateFrom, Carbon $dateTo, array $filters = []): array
     {
-        $agingDate = $dateTo->copy()->endOfDay();
+        $customerId = $filters['customer_id'] ?? null;
 
-        $rows = DB::table('invoices as i')
-            ->join('customers', 'customers.id', '=', 'i.customer_id')
-            ->where('i.company_id', $company->id)
-            ->whereIn('i.status', ['sent', 'partial', 'paid'])
-            ->whereBetween('i.invoice_date', [$dateFrom->toDateString(), $dateTo->toDateString()])
-            ->orderBy('customers.name')
-            ->get(['customers.name as customer_name', 'customers.tax_number', 'i.total', 'i.paid_amount', 'i.balance_due', 'i.due_date', 'i.invoice_date'])
-            ->groupBy('customer_name')
-            ->map(function ($customerInvoices, $customerName) use ($agingDate) {
-                $firstInvoice = $customerInvoices->first();
-                $bucket_1_15 = 0.0;
-                $bucket_16_31 = 0.0;
-                $bucket_31_60 = 0.0;
-                $bucket_61_90 = 0.0;
-                $bucket_over_90 = 0.0;
+        if (!$customerId) {
+            // Keep the aging logic for the general view
+            $agingDate = $dateTo->copy()->endOfDay();
+            $rows = DB::table('invoices as i')
+                ->join('customers', 'customers.id', '=', 'i.customer_id')
+                ->where('i.company_id', $company->id)
+                ->whereIn('i.status', ['sent', 'partial', 'paid'])
+                ->whereBetween('i.invoice_date', [$dateFrom->toDateString(), $dateTo->toDateString()])
+                ->orderBy('customers.name')
+                ->get(['customers.name as customer_name', 'customers.tax_number', 'i.total', 'i.paid_amount', 'i.balance_due', 'i.due_date', 'i.invoice_date'])
+                ->groupBy('customer_name')
+                ->map(function ($customerInvoices, $customerName) use ($agingDate) {
+                    $firstInvoice = $customerInvoices->first();
+                    $buckets = ['1-15' => 0.0, '16-31' => 0.0, '32-60' => 0.0, '61-90' => 0.0, 'over-90' => 0.0];
 
-                foreach ($customerInvoices as $invoice) {
-                    $balance = (float) $invoice->balance_due;
-                    if ($balance <= 0) {
-                        continue;
+                    foreach ($customerInvoices as $invoice) {
+                        $balance = (float) $invoice->balance_due;
+                        if ($balance <= 0) continue;
+
+                        $referenceDate = $invoice->due_date ?: $invoice->invoice_date;
+                        $ageInDays = Carbon::parse($referenceDate)->diffInDays($agingDate, false);
+
+                        if ($ageInDays >= 1 && $ageInDays <= 15) $buckets['1-15'] += $balance;
+                        elseif ($ageInDays >= 16 && $ageInDays <= 31) $buckets['16-31'] += $balance;
+                        elseif ($ageInDays >= 32 && $ageInDays <= 60) $buckets['32-60'] += $balance;
+                        elseif ($ageInDays >= 61 && $ageInDays <= 90) $buckets['61-90'] += $balance;
+                        elseif ($ageInDays > 90) $buckets['over-90'] += $balance;
                     }
 
-                    $referenceDate = $invoice->due_date ?: $invoice->invoice_date;
-                    $ageInDays = Carbon::parse($referenceDate)->diffInDays($agingDate, false);
+                    return [
+                        'customer_name' => $customerName,
+                        'customer_tax_number' => $firstInvoice->tax_number ?? '',
+                        'sales_with_tax' => round((float) $customerInvoices->sum('total'), 2),
+                        'paid_amount' => round((float) $customerInvoices->sum('paid_amount'), 2),
+                        'outstanding_amount' => round((float) $customerInvoices->sum('balance_due'), 2),
+                        'bucket_1_15' => round($buckets['1-15'], 2),
+                        'bucket_16_31' => round($buckets['16-31'], 2),
+                        'bucket_31_60' => round($buckets['32-60'], 2),
+                        'bucket_61_90' => round($buckets['61-90'], 2),
+                        'bucket_over_90' => round($buckets['over-90'], 2),
+                        'label' => $customerName,
+                        'value' => round((float) $customerInvoices->sum('balance_due'), 2),
+                        'format' => 'currency',
+                    ];
+                })
+                ->filter(fn($row) => $row['sales_with_tax'] > 0 || $row['outstanding_amount'] > 0)
+                ->sortByDesc('outstanding_amount')
+                ->values();
 
-                    if ($ageInDays >= 1 && $ageInDays <= 15) {
-                        $bucket_1_15 += $balance;
-                    } elseif ($ageInDays >= 16 && $ageInDays <= 31) {
-                        $bucket_16_31 += $balance;
-                    } elseif ($ageInDays >= 32 && $ageInDays <= 60) {
-                        $bucket_31_60 += $balance;
-                    } elseif ($ageInDays >= 61 && $ageInDays <= 90) {
-                        $bucket_61_90 += $balance;
-                    } elseif ($ageInDays > 90) {
-                        $bucket_over_90 += $balance;
-                    }
-                }
+            $report = $this->interactiveCollectionReport($rows, 'لا توجد بيانات كافية لإظهار كشف حساب المدين خلال الفترة المحددة.');
+            $report['columns'] = [
+                ['key' => 'customer_name', 'label' => 'اسم العميل', 'format' => 'text'],
+                ['key' => 'customer_tax_number', 'label' => 'الرقم الضريبي للعميل', 'format' => 'text'],
+                ['key' => 'sales_with_tax', 'label' => 'المبيعات (شاملة الضريبة)', 'format' => 'currency'],
+                ['key' => 'paid_amount', 'label' => 'المبلغ المدفوع', 'format' => 'currency'],
+                ['key' => 'outstanding_amount', 'label' => 'المبلغ المستحق', 'format' => 'currency'],
+                ['key' => 'bucket_1_15', 'label' => 'المبلغ المستحق خلال 1 - 15 يوم', 'format' => 'currency'],
+                ['key' => 'bucket_16_31', 'label' => 'المبلغ المستحق خلال 16 - 31 يوم', 'format' => 'currency'],
+                ['key' => 'bucket_31_60', 'label' => 'المبلغ المستحق خلال 31 - 60 يوم', 'format' => 'currency'],
+                ['key' => 'bucket_61_90', 'label' => 'المبلغ المستحق خلال 61 - 90 يوم', 'format' => 'currency'],
+                ['key' => 'bucket_over_90', 'label' => 'المبلغ المستحق لأكثر من 90 يوم', 'format' => 'currency'],
+            ];
+            return $report;
+        }
 
-                return [
-                    'customer_name' => $customerName,
-                    'customer_tax_number' => $firstInvoice->tax_number ?? '',
-                    'sales_with_tax' => round((float) $customerInvoices->sum('total'), 2),
-                    'paid_amount' => round((float) $customerInvoices->sum('paid_amount'), 2),
-                    'outstanding_amount' => round((float) $customerInvoices->sum('balance_due'), 2),
-                    'bucket_1_15' => round($bucket_1_15, 2),
-                    'bucket_16_31' => round($bucket_16_31, 2),
-                    'bucket_31_60' => round($bucket_31_60, 2),
-                    'bucket_61_90' => round($bucket_61_90, 2),
-                    'bucket_over_90' => round($bucket_over_90, 2),
-                    'label' => $customerName,
-                    'value' => round((float) $customerInvoices->sum('balance_due'), 2),
-                    'format' => 'currency',
-                ];
-            })
-            ->filter(fn($row) => $row['sales_with_tax'] > 0 || $row['outstanding_amount'] > 0)
-            ->sortByDesc('outstanding_amount')
-            ->values();
+        // Detailed Ledger Logic for a specific customer
+        $customer = Customer::where('company_id', $company->id)->findOrFail($customerId);
+        $customerAccountId = $customer->account_id;
 
-        $report = $this->interactiveCollectionReport($rows, 'لا توجد بيانات كافية لإظهار كشف حساب المدين خلال الفترة المحددة.');
-        $report['columns'] = [
-            ['key' => 'customer_name', 'label' => 'اسم العميل', 'format' => 'text'],
-            ['key' => 'customer_tax_number', 'label' => 'الرقم الضريبي للعميل', 'format' => 'text'],
-            ['key' => 'sales_with_tax', 'label' => 'المبيعات (شاملة الضريبة)', 'format' => 'currency'],
-            ['key' => 'paid_amount', 'label' => 'المبلغ المدفوع', 'format' => 'currency'],
-            ['key' => 'outstanding_amount', 'label' => 'المبلغ المستحق', 'format' => 'currency'],
-            ['key' => 'bucket_1_15', 'label' => 'المبلغ المستحق خلال 1 - 15 يوم', 'format' => 'currency'],
-            ['key' => 'bucket_16_31', 'label' => 'المبلغ المستحق خلال 16 - 31 يوم', 'format' => 'currency'],
-            ['key' => 'bucket_31_60', 'label' => 'المبلغ المستحق خلال 31 - 60 يوم', 'format' => 'currency'],
-            ['key' => 'bucket_61_90', 'label' => 'المبلغ المستحق خلال 61 - 90 يوم', 'format' => 'currency'],
-            ['key' => 'bucket_over_90', 'label' => 'المبلغ المستحق لأكثر من 90 يوم', 'format' => 'currency'],
+        // 1. Calculate Opening Balance
+        $openingBalance = DB::table('journal_lines')
+            ->join('journal_entries', 'journal_entries.id', '=', 'journal_lines.journal_entry_id')
+            ->where('journal_lines.account_id', $customerAccountId)
+            ->where('journal_entries.entry_date', '<', $dateFrom->toDateString())
+            ->where('journal_entries.company_id', $company->id)
+            ->where('journal_entries.status', 'posted')
+            ->selectRaw('SUM(debit - credit) as balance')
+            ->value('balance') ?? 0;
+
+        // 2. Fetch Transactions in range
+        $transactions = DB::table('journal_lines')
+            ->join('journal_entries', 'journal_entries.id', '=', 'journal_lines.journal_entry_id')
+            ->where('journal_lines.account_id', $customerAccountId)
+            ->whereBetween('journal_entries.entry_date', [$dateFrom->toDateString(), $dateTo->toDateString()])
+            ->where('journal_entries.company_id', $company->id)
+            ->where('journal_entries.status', 'posted')
+            ->orderBy('journal_entries.entry_date')
+            ->orderBy('journal_entries.id')
+            ->select('journal_entries.entry_date as date', 'journal_entries.entry_number as reference', 'journal_entries.description as type', 'journal_lines.debit', 'journal_lines.credit')
+            ->get();
+
+        $rows = collect();
+        $rows->push([
+            'date' => $dateFrom->toDateString(),
+            'reference' => '-',
+            'type' => 'رصيد مدور',
+            'debit' => $openingBalance > 0 ? (float)$openingBalance : 0,
+            'credit' => $openingBalance < 0 ? (float)abs($openingBalance) : 0,
+            'balance' => (float)$openingBalance,
+            'label' => 'رصيد مدور',
+            'value' => (float)$openingBalance,
+            'format' => 'currency'
+        ]);
+
+        $runningBalance = $openingBalance;
+        foreach ($transactions as $tx) {
+            $runningBalance += ($tx->debit - $tx->credit);
+            $rows->push([
+                'date' => $tx->date,
+                'reference' => $tx->reference,
+                'type' => $tx->type,
+                'debit' => (float)$tx->debit,
+                'credit' => (float)$tx->credit,
+                'balance' => (float)$runningBalance,
+                'label' => $tx->reference,
+                'value' => (float)$runningBalance,
+                'format' => 'currency'
+            ]);
+        }
+
+        return [
+            'supported' => true,
+            'rows' => $rows,
+            'chart' => [
+                'type' => 'line',
+                'labels' => $rows->pluck('date')->values(),
+                'values' => $rows->pluck('balance')->values(),
+            ],
+            'highlights' => [
+                ['label' => 'عدد العمليات', 'value' => $transactions->count(), 'format' => 'number'],
+                ['label' => 'المديونية الحالية', 'value' => $runningBalance, 'format' => 'currency'],
+                ['label' => 'أعلى عملية', 'value' => $transactions->max('debit') ?? 0, 'format' => 'currency'],
+            ],
+            'empty_message' => 'لا توجد حركات لهذا العميل خلال الفترة المختارة.',
+            'columns' => [
+                ['key' => 'date', 'label' => 'التاريخ', 'format' => 'date'],
+                ['key' => 'reference', 'label' => 'رقم المرجع', 'format' => 'text'],
+                ['key' => 'type', 'label' => 'نوع العملية / الوصف', 'format' => 'text'],
+                ['key' => 'debit', 'label' => 'مدين', 'format' => 'currency'],
+                ['key' => 'credit', 'label' => 'دائن', 'format' => 'currency'],
+                ['key' => 'balance', 'label' => 'الرصيد التراكمي', 'format' => 'currency'],
+            ],
+            'customer' => $customer,
+            'opening_balance' => $openingBalance,
+            'closing_balance' => $runningBalance,
         ];
-
-        return $report;
     }
 
     private function inventorySnapshotInteractiveReport(Company $company): array
@@ -2870,6 +3206,7 @@ class AccountingPageController extends Controller
             ->count();
 
         return [
+            'supported' => true,
             'type' => 'tax_return',
             'title' => 'الإقرار الضريبي',
             'period' => $dateFrom->format('Y-m-d') . ' - ' . $dateTo->format('Y-m-d'),
@@ -2886,7 +3223,21 @@ class AccountingPageController extends Controller
                 'sales_documents' => $salesCount,
                 'purchase_documents' => $purchaseCount,
             ],
-            'rows' => [],
+            'rows' => collect([]),
+            'chart' => [
+                'type' => 'bar',
+                'labels' => ['ضريبة المخرجات', 'ضريبة المدخلات'],
+                'values' => [$outputVat, $inputVat],
+            ],
+            'highlights' => [
+                ['label' => 'صافي الضريبة', 'value' => $netTax, 'format' => 'currency'],
+                ['label' => 'إجمالي المبيعات', 'value' => $totalSales, 'format' => 'currency'],
+                ['label' => 'إجمالي المشتريات', 'value' => $totalPurchases, 'format' => 'currency'],
+            ],
+            'value_format' => 'currency',
+            'insight' => $netTax > 0 
+                ? 'صافي الضريبة المستحقة للدفع لهذه الفترة هي ' . number_format($netTax, 2) . ' ' . $company->currency
+                : 'لا توجد ضريبة مستحقة للدفع لهذه الفترة.',
             'empty_message' => 'لا توجد بيانات ضريبية للفترة المحددة.',
         ];
     }
@@ -3033,6 +3384,10 @@ class AccountingPageController extends Controller
         $company = $this->company($request);
         $validated = $this->validateBranchData($request, $company->id);
         $branch = Branch::query()->create($this->branchPayload($validated, $company));
+
+        if (!$branch->code) {
+            $branch->update(['code' => 'BR-' . str_pad((string) $branch->id, 3, '0', STR_PAD_LEFT)]);
+        }
 
         $this->syncDefaultBranchFlag($branch, (bool) ($validated['is_default'] ?? false));
 
@@ -3386,6 +3741,83 @@ class AccountingPageController extends Controller
         ];
     }
 
+    private function trialBalanceReport(Company $company, Carbon $dateFrom, Carbon $dateTo): array
+    {
+        $rows = DB::table('journal_lines')
+            ->join('journal_entries', 'journal_entries.id', '=', 'journal_lines.journal_entry_id')
+            ->join('accounts', 'accounts.id', '=', 'journal_lines.account_id')
+            ->where('journal_entries.company_id', $company->id)
+            ->whereBetween('journal_entries.entry_date', [$dateFrom->toDateString(), $dateTo->toDateString()])
+            ->groupBy('accounts.id', 'accounts.code', 'accounts.name')
+            ->selectRaw('accounts.code, accounts.name, SUM(journal_lines.debit) as debit_total, SUM(journal_lines.credit) as credit_total')
+            ->orderBy('accounts.code')
+            ->get()
+            ->map(fn($row) => [
+                'label' => $row->code . ' - ' . $row->name,
+                'debit' => (float) $row->debit_total,
+                'credit' => (float) $row->credit_total,
+                'meta' => 'حركة الحساب خلال الفترة',
+                'value' => (float) $row->debit_total - (float) $row->credit_total,
+            ]);
+
+        return [
+            'title' => 'ميزان المراجعة',
+            'rows' => $rows,
+            'chart' => [
+                'type' => 'bar',
+                'labels' => $rows->pluck('label')->take(8)->values(),
+                'values' => $rows->pluck('debit')->take(8)->values(),
+            ],
+            'highlights' => [
+                ['label' => 'إجمالي المدين', 'value' => $rows->sum('debit')],
+                ['label' => 'إجمالي الدائن', 'value' => $rows->sum('credit')],
+            ],
+            'columns' => [
+                ['key' => 'label', 'label' => 'الحساب'],
+                ['key' => 'debit', 'label' => 'مدين', 'format' => 'currency'],
+                ['key' => 'credit', 'label' => 'دائن', 'format' => 'currency'],
+            ],
+            'empty_message' => 'لا توجد حركات حسابات لإنشاء ميزان مراجعة.',
+        ];
+    }
+
+    private function balanceSheetReport(Company $company, Carbon $dateFrom, Carbon $dateTo): array
+    {
+        $rows = Account::where('company_id', $company->id)
+            ->whereIn('account_type', ['asset', 'liability', 'equity'])
+            ->withCount(['journalLines as balance' => function ($query) use ($dateTo) {
+                $query->join('journal_entries', 'journal_entries.id', '=', 'journal_lines.journal_entry_id')
+                    ->whereDate('journal_entries.entry_date', '<=', $dateTo->toDateString())
+                    ->select(DB::raw('SUM(CASE 
+                        WHEN accounts.account_type IN ("asset", "expense", "cogs") THEN (journal_lines.debit - journal_lines.credit)
+                        ELSE (journal_lines.credit - journal_lines.debit)
+                    END)'));
+            }])
+            ->get()
+            ->map(fn($account) => [
+                'label' => $account->code . ' - ' . $account->name,
+                'value' => (float) $account->balance,
+                'meta' => $account->display_account_type ?: 'قائمة المركز المالي',
+            ])
+            ->filter(fn($row) => abs($row['value']) > 0.01)
+            ->values();
+
+        return [
+            'title' => 'قائمة المركز المالي',
+            'rows' => $rows,
+            'chart' => [
+                'type' => 'pie',
+                'labels' => $rows->pluck('label')->take(5)->values(),
+                'values' => $rows->pluck('value')->take(5)->map(fn($v) => abs((float)$v))->values(),
+            ],
+            'highlights' => [
+                ['label' => 'إجمالي الأصول', 'value' => $rows->where('meta', 'الأصول')->sum('value')],
+                ['label' => 'إجمالي الالتزامات', 'value' => $rows->where('meta', 'الالتزامات')->sum('value')],
+            ],
+            'empty_message' => 'لا توجد أرصدة كافية لعرض قائمة المركز المالي.',
+        ];
+    }
+
     private function productSalesReport(Company $company, array $filters, Carbon $dateFrom, Carbon $dateTo): array
     {
         $selectedProductId = isset($filters['product_id']) ? (int) $filters['product_id'] : null;
@@ -3632,6 +4064,12 @@ class AccountingPageController extends Controller
             'invoice_date' => ['required', 'date'],
             'due_date' => ['nullable', 'date', 'after_or_equal:invoice_date'],
             'status' => ['required', Rule::in(['draft', 'sent'])],
+            'revenue_account_id' => [
+                'nullable',
+                Rule::exists('accounts', 'id')->where(fn($query) => $query
+                    ->where('company_id', $companyId)
+                    ->where('account_type', 'revenue')),
+            ],
             'payment_status' => ['nullable', Rule::in(['deferred', 'partial', 'full'])],
             'payment_account_id' => [
                 'nullable',
@@ -3841,7 +4279,7 @@ class AccountingPageController extends Controller
         return $request->validate([
             'branch_modal' => ['nullable', 'string'],
             'name' => ['required', 'string', 'max:120'],
-            'code' => ['required', 'string', 'max:40', $uniqueCodeRule],
+            'code' => ['nullable', 'string', 'max:40', $uniqueCodeRule],
             'city' => ['nullable', 'string', 'max:100'],
             'is_default' => ['nullable', 'boolean'],
         ]);
@@ -3859,7 +4297,7 @@ class AccountingPageController extends Controller
         return $request->validate([
             'channel_modal' => ['nullable', 'string'],
             'name' => ['required', 'string', 'max:120'],
-            'code' => ['required', 'string', 'max:40', $uniqueCodeRule],
+            'code' => ['nullable', 'string', 'max:40', $uniqueCodeRule],
             'is_default' => ['nullable', 'boolean'],
         ]);
     }
@@ -3913,11 +4351,12 @@ class AccountingPageController extends Controller
 
         $allowedCities = $this->cityOptionsForCountryCode($validated['country_code']);
 
-        if ($allowedCities !== [] && !empty($validated['city']) && !in_array($validated['city'], $allowedCities, true)) {
-            throw ValidationException::withMessages([
-                'city' => 'المدينة المحددة لا تتبع الدولة المختارة للشركة.',
-            ]);
-        }
+        // We comment out strict validation to allow 'Yemen' or other custom configurations without locking the custom city
+        // if ($allowedCities !== [] && !empty($validated['city']) && !in_array($validated['city'], $allowedCities, true)) {
+        //     throw ValidationException::withMessages([
+        //         'city' => 'المدينة المحددة لا تتبع الدولة المختارة للشركة.',
+        //     ]);
+        // }
 
         return $validated;
     }
@@ -3926,10 +4365,12 @@ class AccountingPageController extends Controller
     {
         $defaultBranch = !$branch && !Branch::query()->where('company_id', $company->id)->exists();
 
+        $code = !empty($validated['code']) ? mb_strtoupper(trim($validated['code'])) : null;
+        
         return [
             'company_id' => $company->id,
             'name' => $validated['name'],
-            'code' => mb_strtoupper(trim($validated['code'])),
+            'code' => $code,
             'city' => $validated['city'] ?? $company->city,
             'is_default' => (bool) ($validated['is_default'] ?? $defaultBranch),
         ];
@@ -3939,10 +4380,12 @@ class AccountingPageController extends Controller
     {
         $defaultChannel = !$salesChannel && !SalesChannel::query()->where('company_id', $company->id)->exists();
 
+        $code = !empty($validated['code']) ? mb_strtoupper(trim($validated['code'])) : null;
+
         return [
             'company_id' => $company->id,
             'name' => $validated['name'],
-            'code' => mb_strtoupper(trim($validated['code'])),
+            'code' => $code,
             'is_default' => (bool) ($validated['is_default'] ?? $defaultChannel),
         ];
     }
@@ -4060,7 +4503,7 @@ class AccountingPageController extends Controller
             ->where(fn($query) => $query->where('company_id', $companyId));
 
         return $request->validate([
-            'code' => ['required', 'string', 'max:20', $uniqueCodeRule],
+            'code' => ['nullable', 'string', 'max:20', $uniqueCodeRule],
             'name' => ['required', 'string', 'max:200'],
             'name_ar' => ['nullable', 'string', 'max:200'],
             'account_type' => ['required', Rule::in(['asset', 'liability', 'equity', 'revenue', 'expense', 'cogs'])],
@@ -4464,7 +4907,7 @@ class AccountingPageController extends Controller
     private function validatePurchaseData(Request $request, int $companyId, ?Purchase $purchase = null): array
     {
         $attachmentRules = [
-            $purchase ? 'nullable' : 'required',
+            'nullable',
             'file',
             'mimes:jpg,jpeg,png,pdf',
             'max:8192',
@@ -4709,9 +5152,9 @@ class AccountingPageController extends Controller
         $taxAmount = 0;
 
         foreach ($validated['item_quantity'] as $index => $quantity) {
-            $unitPrice = (float) ($validated['item_price'][$index] ?? 0);
+            $costPrice = (float) ($validated['item_cost_price'][$index] ?? 0);
             $rate = (float) ($validated['item_tax_rate'][$index] ?? 0);
-            $lineSubtotal = (float) $quantity * $unitPrice;
+            $lineSubtotal = (float) $quantity * $costPrice;
             $lineTax = $lineSubtotal * ($rate / 100);
 
             $subtotal += $lineSubtotal;
@@ -5136,6 +5579,11 @@ class AccountingPageController extends Controller
         $customers = Customer::where('company_id', $company->id)->orderBy('name')->get();
         $products = Product::forCompany($company->id)->active()->orderBy('name')->get();
         $paymentAccounts = $this->directPaymentAccounts($company->id);
+        $revenueAccounts = Account::where('company_id', $company->id)
+            ->where('account_type', 'revenue')
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get();
         $salesChannels = SalesChannel::query()->where('company_id', $company->id)->orderByDesc('is_default')->orderBy('name')->get();
         $defaultTaxRate = 15;
         $defaultSalesChannelId = $this->defaultSalesChannelId($company->id);
@@ -5145,15 +5593,22 @@ class AccountingPageController extends Controller
             $invoice->loadMissing(['items', 'employee.branch', 'user']);
         }
 
+        $companyCountry = $this->countryConfigForCompany($company);
+        $companyCities = collect($companyCountry['cities'] ?? []);
+        $companyCountryLabel = $companyCountry['name_ar'] ?? ($company->country_code ?? 'غير محدد');
+
         return view('invoice_form', compact(
             'company',
             'customers',
             'products',
             'paymentAccounts',
+            'revenueAccounts',
             'salesChannels',
             'defaultTaxRate',
             'defaultSalesChannelId',
             'salesOwnerContext',
+            'companyCountryLabel',
+            'companyCities',
             'invoice'
         ));
     }
@@ -5288,15 +5743,16 @@ class AccountingPageController extends Controller
         foreach ($validated['item_description'] as $index => $description) {
             $quantity = (float) ($validated['item_quantity'][$index] ?? 0);
             $costPrice = (float) ($validated['item_cost_price'][$index] ?? 0);
-            $unitPrice = (float) ($validated['item_price'][$index] ?? 0);
+            $sellPrice = (float) ($validated['item_price'][$index] ?? 0);
             $taxRate = (float) ($validated['item_tax_rate'][$index] ?? 0);
-            $lineSubtotal = $quantity * $unitPrice;
+            $lineSubtotal = $quantity * $costPrice;
             $lineTax = $lineSubtotal * ($taxRate / 100);
 
             // تحديد المنتج: إذا تم اختياره أو البحث عنه/إنشاؤه بالاسم
             $productId = $validated['item_product_id'][$index] ?? null;
             $productName = $validated['item_product_name'][$index] ?? $description;
 
+            $product = null;
             if (empty($productId) && !empty($productName)) {
                 // البحث عن منتج موجود بالاسم
                 $product = Product::where('company_id', $purchase->company_id)
@@ -5310,25 +5766,40 @@ class AccountingPageController extends Controller
                         'name' => trim($productName),
                         'code' => $this->generateProductCode($purchase->company_id),
                         'type' => 'product',
-                        'cost_price' => $costPrice > 0 ? $costPrice : $unitPrice,
-                        'sell_price' => $unitPrice > 0 ? $unitPrice : ($costPrice * 1.3), // إذا سعر البيع غير محدد استخدم هامش 30%
+                        'cost_price' => $costPrice > 0 ? $costPrice : ($sellPrice > 0 ? $sellPrice : 0),
+                        'sell_price' => $sellPrice > 0 ? $sellPrice : ($costPrice > 0 ? $costPrice * 1.3 : 0),
                         'stock_quantity' => 0,
                         'is_active' => true,
                     ]);
+                } else {
+                    // تحديث أسعار المنتج الموجود بالاسم
+                    $product->update([
+                        'cost_price' => $costPrice > 0 ? $costPrice : $product->cost_price,
+                        'sell_price' => $sellPrice > 0 ? $sellPrice : $product->sell_price,
+                    ]);
                 }
-
-                $productId = $product->id;
+            } else {
+                $product = Product::find($productId);
+                if ($product) {
+                    // تحديث أسعار المنتج المختار يدوياً
+                    $product->update([
+                        'cost_price' => $costPrice > 0 ? $costPrice : $product->cost_price,
+                        'sell_price' => $sellPrice > 0 ? $sellPrice : $product->sell_price,
+                    ]);
+                }
             }
 
-            $purchase->items()->create([
-                'product_id' => $productId,
-                'description' => $description,
-                'quantity' => $quantity,
-                'unit_price' => $unitPrice,
-                'tax_rate' => $taxRate,
-                'tax_amount' => round($lineTax, 2),
-                'total' => round($lineSubtotal + $lineTax, 2),
-            ]);
+            if ($product) {
+                $purchase->items()->create([
+                    'product_id' => $product->id,
+                    'description' => $description,
+                    'quantity' => $quantity,
+                    'unit_price' => $costPrice,
+                    'tax_rate' => $taxRate,
+                    'tax_amount' => round($lineTax, 2),
+                    'total' => round($lineSubtotal + $lineTax, 2),
+                ]);
+            }
         }
     }
 
@@ -5439,6 +5910,12 @@ class AccountingPageController extends Controller
             'US' => ['name_ar' => 'الولايات المتحدة', 'currency' => 'USD', 'cities' => ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Miami', 'Dallas', 'Seattle', 'San Francisco']],
             'EG' => ['name_ar' => 'مصر', 'currency' => 'EGP', 'cities' => ['القاهرة', 'الجيزة', 'الإسكندرية', 'المنصورة', 'طنطا', 'أسيوط', 'الأقصر', 'أسوان']],
             'JO' => ['name_ar' => 'الأردن', 'currency' => 'JOD', 'cities' => ['عمّان', 'إربد', 'الزرقاء', 'العقبة', 'السلط', 'مادبا', 'جرش', 'الكرك']],
+            'YE' => ['name_ar' => 'اليمن', 'currency' => 'YER', 'cities' => ['صنعاء', 'عدن', 'تعز', 'الحديدة', 'إب', 'المكلا']],
+            'OM' => ['name_ar' => 'سلطنة عمان', 'currency' => 'OMR', 'cities' => ['مسقط', 'صلالة', 'صحار', 'نزوى', 'صور', 'الرستاق']],
+            'KW' => ['name_ar' => 'الكويت', 'currency' => 'KWD', 'cities' => ['مدينة الكويت', 'الأحمدي', 'حولي', 'السالمية', 'الفروانية']],
+            'BH' => ['name_ar' => 'البحرين', 'currency' => 'BHD', 'cities' => ['المنامة', 'المحرق', 'الرفاع', 'مدينة عيسى', 'مدينة حمد']],
+            'QA' => ['name_ar' => 'قطر', 'currency' => 'QAR', 'cities' => ['الدوحة', 'الوكرة', 'الخور', 'الريان', 'أم صلال']],
+            'OTHER' => ['name_ar' => 'غير ذلك (سحابي)', 'currency' => 'USD', 'cities' => []],
         ]);
     }
 

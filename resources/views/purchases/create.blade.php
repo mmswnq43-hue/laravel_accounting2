@@ -171,16 +171,21 @@ tbody[data-purchase-items] {
         <div class="row g-3 mb-4">
             <div class="col-md-3">
                 <label class="form-label">المورد <span class="text-danger">*</span></label>
-                <select name="supplier_id" class="form-select @error('supplier_id') is-invalid @enderror" required>
-                    <option value="">اختر المورد</option>
-                    @foreach ($suppliers as $supplier)
-                        <option value="{{ $supplier->id }}" {{ $supplierIdValue == $supplier->id ? 'selected' : '' }}>
-                            {{ $supplier->name }}
-                        </option>
-                    @endforeach
-                </select>
+                <div class="input-group">
+                    <div style="position: relative; flex-grow: 1;">
+                        <input type="hidden" name="supplier_id" id="supplier_id" value="{{ $supplierIdValue }}">
+                        <input type="text" id="supplier_search" class="form-control @error('supplier_id') is-invalid @enderror" 
+                               placeholder="ابحث عن مورد..." autocomplete="off"
+                               value="{{ $supplierIdValue ? ($suppliers->firstWhere('id', $supplierIdValue)->name ?? '') : '' }}"
+                               data-suppliers-json='{{ json_encode($suppliers->map(fn($s) => ['id' => $s->id, 'name' => $s->name, 'phone' => $s->phone ?? '', 'email' => $s->email ?? ''])->values()) }}'>
+                        <div id="supplier_autocomplete_dropdown" class="product-autocomplete-dropdown" style="display: none;"></div>
+                    </div>
+                    <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addSupplierModal">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
                 @error('supplier_id')
-                    <div class="invalid-feedback">{{ $message }}</div>
+                    <div class="invalid-feedback d-block">{{ $message }}</div>
                 @enderror
             </div>
 
@@ -271,7 +276,7 @@ tbody[data-purchase-items] {
             </div>
 
             <div class="col-md-6">
-                <label class="form-label">ملف الفاتورة (PDF أو صورة، حتى 8 ميغابايت)</label>
+                <label class="form-label">ملف الفاتورة (PDF أو صورة - اختياري)</label>
                 <input type="file" name="attachment" class="form-control @error('attachment') is-invalid @enderror" accept=".pdf,.jpg,.jpeg,.png">
                 @error('attachment')
                     <div class="invalid-feedback">{{ $message }}</div>
@@ -384,6 +389,85 @@ tbody[data-purchase-items] {
         </div>
     </form>
 </div>
+
+<!-- Modal Add Supplier -->
+<div class="modal fade" id="addSupplierModal" tabindex="-1" aria-labelledby="addSupplierModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title font-weight-bold" id="addSupplierModalLabel">إضافة مورد جديد</h5>
+                <button type="button" class="btn-close ms-0" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addSupplierForm">
+                    @csrf
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">الاسم <span class="text-danger">*</span></label>
+                            <input type="text" name="name" class="form-control" value="{{ old('name') }}" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">الاسم بالعربي</label>
+                            <input type="text" name="name_ar" class="form-control" value="{{ old('name_ar') }}">
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">الحالة</label>
+                            <select name="is_active" class="form-select">
+                                <option value="1" {{ old('is_active', '1') === '1' ? 'selected' : '' }}>نشط</option>
+                                <option value="0" {{ old('is_active') === '0' ? 'selected' : '' }}>غير نشط</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">البريد الإلكتروني</label>
+                            <input type="email" name="email" class="form-control" value="{{ old('email') }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">الهاتف</label>
+                            <input type="text" name="phone" class="form-control" value="{{ old('phone') }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">الجوال</label>
+                            <input type="text" name="mobile" class="form-control" value="{{ old('mobile') }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">المدينة</label>
+                            <select name="city" class="form-select">
+                                <option value="">اختر المدينة</option>
+                                @foreach ($companyCities as $city)
+                                    <option value="{{ $city }}" {{ old('city') === $city ? 'selected' : '' }}>{{ $city }}</option>
+                                @endforeach
+                            </select>
+                            <div class="form-text small">الدولة المعتمدة: {{ $companyCountryLabel }}</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">الدولة</label>
+                            <input type="text" class="form-control" value="{{ $companyCountryLabel }}" readonly tabindex="-1">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">الرقم الضريبي</label>
+                            <input type="text" name="tax_number" class="form-control" value="{{ old('tax_number') }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">الحد الائتماني</label>
+                            <input type="number" name="credit_limit" class="form-control" min="0" step="0.01" value="{{ old('credit_limit', 0) }}" lang="en" dir="ltr">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">العنوان</label>
+                            <textarea name="address" class="form-control" rows="2">{{ old('address') }}</textarea>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                <button type="button" class="btn btn-primary" id="saveSupplierBtn">
+                    <i class="fas fa-save me-1"></i> حفظ المورد وتعئبته
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection
 
 @push('scripts')
@@ -398,6 +482,151 @@ function initPurchaseForm() {
     forms.forEach(form => {
         setupPurchaseItems(form);
         calculatePurchaseTotals(form);
+        setupSupplierAutocomplete(form);
+        setupQuickAddSupplier(form);
+    });
+}
+
+function setupSupplierAutocomplete(form) {
+    const searchInput = form.querySelector('#supplier_search');
+    const idInput = form.querySelector('#supplier_id');
+    const dropdown = form.querySelector('#supplier_autocomplete_dropdown');
+
+    if (!searchInput || !dropdown) return;
+
+    let suppliers = [];
+    try {
+        suppliers = JSON.parse(searchInput.dataset.suppliersJson || '[]');
+    } catch (e) {
+        suppliers = [];
+    }
+
+    searchInput.addEventListener('input', () => {
+        const query = searchInput.value.trim().toLowerCase();
+        idInput.value = '';
+
+        if (query.length < 1) {
+            dropdown.style.display = 'none';
+            return;
+        }
+
+        const matches = suppliers.filter(s => s.name.toLowerCase().includes(query));
+
+        if (matches.length > 0) {
+            dropdown.innerHTML = matches.map(s =>
+                `<div class="product-suggestion" data-supplier='${JSON.stringify(s)}'>
+                    <strong>${s.name}</strong>
+                    ${s.phone ? `<br><small class="text-muted"><i class="fas fa-phone"></i> ${s.phone}</small>` : ''}
+                </div>`
+            ).join('');
+            dropdown.style.display = 'block';
+
+            dropdown.querySelectorAll('.product-suggestion').forEach(suggestion => {
+                suggestion.addEventListener('click', () => {
+                    const supplier = JSON.parse(suggestion.dataset.supplier);
+                    searchInput.value = supplier.name;
+                    idInput.value = supplier.id;
+                    dropdown.style.display = 'none';
+                });
+            });
+        } else {
+            dropdown.innerHTML = `<div style="padding: 8px 12px; color: #666;">لم يتم العثور على مورد</div>`;
+            dropdown.style.display = 'block';
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+            dropdown.style.display = 'none';
+        }
+    });
+
+    searchInput.addEventListener('focus', () => {
+        if (searchInput.value.trim() === '' && suppliers.length > 0) {
+            dropdown.innerHTML = suppliers.slice(0, 10).map(s =>
+                `<div class="product-suggestion" data-supplier='${JSON.stringify(s)}'>
+                    <strong>${s.name}</strong>
+                </div>`
+            ).join('');
+            dropdown.style.display = 'block';
+
+            dropdown.querySelectorAll('.product-suggestion').forEach(suggestion => {
+                suggestion.addEventListener('click', () => {
+                    const supplier = JSON.parse(suggestion.dataset.supplier);
+                    searchInput.value = supplier.name;
+                    idInput.value = supplier.id;
+                    dropdown.style.display = 'none';
+                });
+            });
+        }
+    });
+}
+
+function setupQuickAddSupplier(form) {
+    const saveBtn = document.getElementById('saveSupplierBtn');
+    const addForm = document.getElementById('addSupplierForm');
+    const modalEl = document.getElementById('addSupplierModal');
+
+    if (!saveBtn || !addForm) return;
+
+    saveBtn.addEventListener('click', async () => {
+        const formData = new FormData(addForm);
+        
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> جاري الحفظ...';
+
+        try {
+            const response = await fetch('{{ route('suppliers.store') }}', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                // Add to local list
+                const searchInput = document.getElementById('supplier_search');
+                const idInput = document.getElementById('supplier_id');
+                
+                let suppliers = [];
+                try {
+                    suppliers = JSON.parse(searchInput.dataset.suppliersJson || '[]');
+                } catch (e) { searchInput.dataset.suppliersJson = '[]'; }
+
+                suppliers.push(result.supplier);
+                searchInput.dataset.suppliersJson = JSON.stringify(suppliers);
+
+                // Select the new supplier
+                searchInput.value = result.supplier.name;
+                idInput.value = result.supplier.id;
+
+                // Close modal
+                const modalInstance = bootstrap.Modal.getInstance(modalEl);
+                if (modalInstance) modalInstance.hide();
+                addForm.reset();
+
+                // Alert success
+                alert('تمت إضافة المورد واختياره بنجاح: ' + result.supplier.name);
+            } else {
+                // Handle validation errors or other failures
+                let errorMessage = result.message || 'فشل الحفظ';
+                if (result.errors) {
+                    const errorDetails = Object.values(result.errors).flat().join('\n');
+                    errorMessage += ':\n' + errorDetails;
+                }
+                alert('حدث خطأ: ' + errorMessage);
+            }
+        } catch (error) {
+            console.error('Error saving supplier:', error);
+            alert('حدث خطأ أثناء الاتصال بالخادم. يرجى التحقق من اتصالك والمحاولة مرة أخرى.');
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fas fa-save me-1"></i> حفظ المورد وتعئبته';
+        }
     });
 }
 

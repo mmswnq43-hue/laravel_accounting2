@@ -126,6 +126,39 @@
             @endif
 
             <div class="top-nav-right">
+                @php
+                    $canInvoice = $currentUser?->hasPermission('manage_invoices');
+                    $canPurchase = $currentUser?->hasPermission('manage_purchases');
+                    $canProduct = $currentUser?->hasPermission('manage_products');
+                    $canAccount = $currentUser?->hasPermission('manage_accounts');
+                    $canJournal = $currentUser?->hasPermission('manage_journal_entries');
+                    $hasQuickActions = $canInvoice || $canPurchase || $canProduct || $canAccount || $canJournal;
+                @endphp
+                @if ($hasQuickActions)
+                <div class="dropdown me-2">
+                    <button class="btn btn-gradient btn-sm dropdown-toggle" data-bs-toggle="dropdown" title="إجراءات سريعة">
+                        <i class="fas fa-bolt me-1"></i> إجراء سريع
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        @if ($canInvoice)
+                        <li><a class="dropdown-item" href="{{ route('invoices.create') }}"><i class="fas fa-file-invoice text-primary me-2"></i>فاتورة مبيعات جديدة</a></li>
+                        @endif
+                        @if ($canPurchase)
+                        <li><a class="dropdown-item" href="{{ route('purchases.create') }}"><i class="fas fa-shopping-cart text-warning me-2"></i>طلب شراء جديد</a></li>
+                        @endif
+                        @if ($canJournal)
+                        <li><a class="dropdown-item" href="{{ route('journal_entries.create') }}"><i class="fas fa-book text-info me-2"></i>قيد محاسبي جديد</a></li>
+                        @endif
+                        @if ($canProduct)
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{{ route('products') }}"><i class="fas fa-box text-success me-2"></i>إدارة المنتجات</a></li>
+                        @endif
+                        @if ($canAccount)
+                        <li><a class="dropdown-item" href="{{ route('chart_of_accounts') }}"><i class="fas fa-sitemap text-secondary me-2"></i>شجرة الحسابات</a></li>
+                        @endif
+                    </ul>
+                </div>
+                @endif
                 <div class="dropdown">
                     <button class="btn btn-link dropdown-toggle" data-bs-toggle="dropdown">
                         <i class="fas fa-user-circle"></i>

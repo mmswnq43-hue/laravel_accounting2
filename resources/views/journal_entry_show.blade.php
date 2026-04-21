@@ -10,6 +10,9 @@
             <p class="text-muted mt-2 mb-0">مراجعة القيد سطرًا بسطر مع مصدره المحاسبي وطريقة إنشائه.</p>
         </div>
         <div class="list-actions-group">
+            <a href="{{ route('journal_entries.show', ['journalEntry' => $journalEntry->id, 'print' => 1]) }}" class="btn btn-outline-secondary" target="_blank">
+                <i class="fas fa-print ms-1"></i> طباعة القيد (Ctrl+P)
+            </a>
             <a href="{{ route('journal_entries') }}" class="btn btn-secondary">
                 <i class="fas fa-arrow-right ms-1"></i> العودة إلى القيود
             </a>
@@ -100,3 +103,14 @@
     </div>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+document.addEventListener('keydown', function(event) {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'p') {
+        event.preventDefault();
+        window.open('{{ route('journal_entries.show', ['journalEntry' => $journalEntry->id, 'print' => 1]) }}', '_blank');
+    }
+});
+</script>
+@endpush

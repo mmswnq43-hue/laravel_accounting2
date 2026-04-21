@@ -206,17 +206,22 @@
             <div>
                 <div class="report-view-breadcrumb">التقارير / {{ $reportMeta['section'] === 'sales' ? 'المبيعات' : $reportMeta['title'] }}</div>
                 <h1 class="report-view-title">{{ $reportPayload['title'] }}</h1>
-                <p class="report-view-description">{{ $reportPayload['description'] }}</p>
-                <div class="report-view-range">{{ $reportPayload['date_range_label'] }}</div>
-                <div class="report-view-insight">{{ $reportPayload['insight'] }}</div>
+                <p class="report-view-description">{{ $reportPayload['description'] ?? '' }}</p>
+                <div class="report-view-range">{{ $reportPayload['date_range_label'] ?? '' }}</div>
+                <div class="report-view-insight">{{ $reportPayload['insight'] ?? '' }}</div>
             </div>
             <div class="report-view-actions">
                 <a href="{{ route('reports', ['section' => $reportMeta['section'], 'report' => $reportKey]) }}" class="btn btn-outline-secondary">
                     <i class="fas fa-arrow-right ms-1"></i> العودة للتقارير
                 </a>
-                <a href="{{ route('reports.show', array_filter(['report' => $reportKey, 'period' => $selectedPeriod, 'date_from' => $selectedPeriod === 'custom' ? $dateFrom->format('Y-m-d') : null, 'date_to' => $selectedPeriod === 'custom' ? $dateTo->format('Y-m-d') : null, 'print' => 1])) }}" class="btn btn-outline-primary" target="_blank" rel="noopener">
+                <a href="{{ route('reports.show', array_filter(['report' => $reportKey, 'period' => $selectedPeriod, 'date_from' => $selectedPeriod === 'custom' ? $dateFrom->format('Y-m-d') : null, 'date_to' => $selectedPeriod === 'custom' ? $dateTo->format('Y-m-d') : null, 'print' => 1, 'account_id' => $selectedAccountId ?? null, 'customer_id' => $selectedCustomerId ?? null])) }}" class="btn btn-outline-primary" target="_blank" rel="noopener">
                     <i class="fas fa-print ms-1"></i> طباعة
                 </a>
+                @if($reportKey === 'customer_statement' && ($selectedCustomerId ?? null))
+                <a href="{{ route('reports.show', array_filter(['report' => $reportKey, 'period' => $selectedPeriod, 'date_from' => $selectedPeriod === 'custom' ? $dateFrom->format('Y-m-d') : null, 'date_to' => $selectedPeriod === 'custom' ? $dateTo->format('Y-m-d') : null, 'export' => 'excel', 'customer_id' => $selectedCustomerId])) }}" class="btn btn-outline-success">
+                    <i class="fas fa-file-excel ms-1"></i> تصدير إكسل
+                </a>
+                @endif
             </div>
         </div>
     </section>
@@ -239,6 +244,33 @@
                 <label for="date_to">إلى تاريخ</label>
                 <input type="date" class="form-control" id="date_to" name="date_to" value="{{ $dateTo->format('Y-m-d') }}" {{ $selectedPeriod !== 'custom' ? 'disabled' : '' }}>
             </div>
+            @if (isset($accounts))
+            <div>
+                <label for="account_id">الحساب (اختياري)</label>
+                <select class="form-select" id="account_id" name="account_id" onchange="this.form.submit()">
+                    <option value="">جميع الحسابات</option>
+                    @foreach ($accounts as $acc)
+                        <option value="{{ $acc->id }}" {{ ($selectedAccountId ?? null) == $acc->id ? 'selected' : '' }}>
+                            {{ $acc->code }} - {{ $acc->name }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+            @endif
+
+            @if (isset($customers))
+            <div>
+                <label for="customer_id">العميل (اختياري)</label>
+                <select class="form-select" id="customer_id" name="customer_id" onchange="this.form.submit()">
+                    <option value="">جميع العملاء</option>
+                    @foreach ($customers as $cust)
+                        <option value="{{ $cust->id }}" {{ ($selectedCustomerId ?? null) == $cust->id ? 'selected' : '' }}>
+                            {{ $cust->name }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+            @endif
             <div>
                 <button type="submit" class="btn btn-primary w-100">تحديث التقرير</button>
             </div>
@@ -283,11 +315,15 @@
                                 $columnFormat = $column['format'] ?? ($columnKey === 'meta' ? 'text' : ($row['format'] ?? $defaultValueFormat));
                                 $columnValue = $row[$columnKey] ?? '';
                             @endphp
-                            <td class="{{ in_array($columnFormat, ['currency', 'number'], true) ? 'fw-bold' : '' }}">
+                            @php
+                                $isNegative = is_numeric($columnValue) && (float)$columnValue < 0;
+                                $displayValue = $formatMetric($columnValue, $columnFormat);
+                            @endphp
+                            <td class="{{ in_array($columnFormat, ['currency', 'number'], true) ? 'fw-bold' : '' }} {{ $isNegative ? 'text-danger' : '' }}">
                                 @if ($columnKey === 'meta')
                                     <span class="report-view-meta">{{ $columnValue }}</span>
                                 @else
-                                    {{ $formatMetric($columnValue, $columnFormat) }}
+                                    {{ $displayValue }}
                                 @endif
                             </td>
                         @endforeach
