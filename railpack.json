@@ -2,5 +2,11 @@
   "$schema": "https://schema.railpack.com",
   "php": {
     "extensions": ["gd", "zip", "bcmath", "intl", "exif"]
+  },
+  "build": {
+    "buildCommand": "composer install --no-dev --optimize-autoloader --no-scripts --no-interaction && npm install && npm run build && php artisan optimize:clear && php artisan config:cache && php artisan route:cache && php artisan view:cache"
+  },
+  "deploy": {
+    "startCommand": "bash /app/railway-start.sh"
   }
 }
