@@ -5,6 +5,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AccountingPageController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\UserManagementController;
+use App\Http\Controllers\ProductReportController;
 
 // Authentication Routes
 Route::get('/', [AuthController::class, 'showLanding'])->name('landing');
@@ -127,6 +128,8 @@ Route::middleware(['auth', 'password.change', 'company'])->group(function () {
 
         Route::get('/hr', [AccountingPageController::class, 'hr'])->name('hr');
         Route::get('/employees', [AccountingPageController::class, 'hr'])->name('employees.index');
+        Route::get('/employees/create', [AccountingPageController::class, 'createEmployee'])->name('employees.create');
+        Route::get('/employees/{employee}/edit', [AccountingPageController::class, 'editEmployee'])->name('employees.edit');
         Route::post('/employees', [AccountingPageController::class, 'storeEmployee'])->name('employees.store');
         Route::put('/employees/{employee}', [AccountingPageController::class, 'updateEmployee'])->name('employees.update');
         Route::delete('/employees/{employee}', [AccountingPageController::class, 'destroyEmployee'])->name('employees.destroy');
@@ -140,7 +143,9 @@ Route::middleware(['auth', 'password.change', 'company'])->group(function () {
 
     Route::middleware('permission:manage_users')->group(function () {
         Route::get('/users', [UserManagementController::class, 'index'])->name('users.index');
+        Route::get('/users/create', [UserManagementController::class, 'create'])->name('users.create');
         Route::post('/users', [UserManagementController::class, 'store'])->name('users.store');
+        Route::get('/users/{user}/edit', [UserManagementController::class, 'edit'])->name('users.edit');
         Route::put('/users/{user}', [UserManagementController::class, 'update'])->name('users.update');
     });
 });

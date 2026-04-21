@@ -39,6 +39,42 @@ class UserManagementController extends Controller
         return view('users.index', compact('company', 'users', 'roles', 'permissions', 'employees', 'canManageUsers'));
     }
 
+    public function create(Request $request): View
+    {
+        AccessControl::ensureSeeded();
+        $company = $request->user()->company;
+        $employees = Employee::query()
+            ->with('branch')
+            ->where('company_id', $company->id)
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get();
+
+        $roles = Role::query()->with('permissions')->orderBy('id')->get();
+        $permissions = Permission::query()->orderBy('group')->orderBy('id')->get()->groupBy('group');
+
+        return view('users.create', compact('company', 'employees', 'roles', 'permissions'));
+    }
+
+    public function edit(Request $request, User $user): View
+    {
+        AccessControl::ensureSeeded();
+        abort_if((int) $user->company_id !== (int) $request->user()->company_id, 404);
+
+        $company = $request->user()->company;
+        $employees = Employee::query()
+            ->with('branch')
+            ->where('company_id', $company->id)
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get();
+
+        $roles = Role::query()->with('permissions')->orderBy('id')->get();
+        $permissions = Permission::query()->orderBy('group')->orderBy('id')->get()->groupBy('group');
+
+        return view('users.edit', compact('company', 'user', 'employees', 'roles', 'permissions'));
+    }
+
     public function store(Request $request): RedirectResponse
     {
         AccessControl::ensureSeeded();

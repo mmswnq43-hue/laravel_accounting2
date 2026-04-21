@@ -24,9 +24,10 @@
         <p class="text-muted mt-2 mb-0">كل موظف مرتبط بفرع واحد، ويمكن ربط المستخدمين بهم من شاشة إدارة المستخدمين.</p>
     </div>
     @if ($canManageEmployees)
-        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createEmployeeModal">
+    @if ($canManageEmployees)
+        <a href="{{ route('employees.create') }}" class="btn btn-primary">
             <i class="fas fa-plus ms-1"></i> إضافة موظف
-        </button>
+        </a>
     @endif
 </div>
 
@@ -85,9 +86,9 @@
                             </td>
                             <td>
                                 @if ($canManageEmployees)
-                                    <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editEmployeeModal{{ $employee->id }}">
+                                    <a href="{{ route('employees.edit', $employee) }}" class="btn btn-sm btn-outline-primary">
                                         <i class="fas fa-edit"></i>
-                                    </button>
+                                    </a>
                                     <form method="POST" action="{{ route('employees.destroy', $employee) }}" class="d-inline" onsubmit="return confirm('سيتم حذف الموظف نهائيًا إذا لم يكن مرتبطًا بأي مستخدم أو عملية بيع. هل تريد المتابعة؟');">
                                         @csrf
                                         @method('DELETE')
@@ -106,30 +107,6 @@
         </div>
     </div>
 </div>
-
-@if ($canManageEmployees)
-    @include('partials.employee_modal', [
-        'modalId' => 'createEmployeeModal',
-        'modalTitle' => 'إضافة موظف',
-        'action' => route('employees.store'),
-        'employee' => null,
-        'branches' => $branches,
-        'statusLabels' => $statusLabels,
-        'employmentTypeLabels' => $employmentTypeLabels,
-    ])
-
-    @foreach ($employees as $employee)
-        @include('partials.employee_modal', [
-            'modalId' => 'editEmployeeModal' . $employee->id,
-            'modalTitle' => 'تعديل الموظف: ' . $employee->full_name,
-            'action' => route('employees.update', $employee),
-            'employee' => $employee,
-            'branches' => $branches,
-            'statusLabels' => $statusLabels,
-            'employmentTypeLabels' => $employmentTypeLabels,
-        ])
-    @endforeach
-@endif
 @endsection
 
 @push('scripts')

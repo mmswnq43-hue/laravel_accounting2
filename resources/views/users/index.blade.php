@@ -9,9 +9,9 @@
         <p class="text-muted mt-2 mb-0">إضافة أعضاء الفريق وتحديد أدوارهم وصلاحياتهم بشكل مرن</p>
     </div>
     @if ($canManageUsers)
-        <button type="button" class="btn btn-gradient" data-bs-toggle="modal" data-bs-target="#createUserModal">
+        <a href="{{ route('users.create') }}" class="btn btn-gradient">
             <i class="fas fa-user-plus ms-1"></i> إضافة مستخدم
-        </button>
+        </a>
     @endif
 </div>
 
@@ -91,14 +91,9 @@
                             <td>{{ $managedUser->last_login?->format('Y-m-d H:i') ?? 'لم يسجل دخول بعد' }}</td>
                             <td>
                                 @if ($canManageUsers)
-                                    <button
-                                        type="button"
-                                        class="btn btn-sm btn-outline-primary"
-                                        data-bs-toggle="modal"
-                                        data-bs-target="#editUserModal{{ $managedUser->id }}"
-                                    >
+                                    <a href="{{ route('users.edit', $managedUser) }}" class="btn btn-sm btn-outline-primary">
                                         <i class="fas fa-edit"></i>
-                                    </button>
+                                    </a>
                                 @endif
                             </td>
                         </tr>
@@ -112,47 +107,6 @@
         </div>
     </div>
 </div>
-
-@php
-    $groupTitles = [
-        'team' => 'إدارة الفريق',
-        'settings' => 'الإعدادات',
-        'reports' => 'التقارير',
-        'accounting' => 'المحاسبة',
-        'sales' => 'المبيعات',
-        'procurement' => 'المشتريات',
-        'inventory' => 'المخزون',
-        'hr' => 'الموارد البشرية',
-    ];
-@endphp
-
-@if ($canManageUsers)
-    @include('users.partials.form_modal', [
-        'modalId' => 'createUserModal',
-        'modalTitle' => 'إضافة مستخدم جديد',
-        'action' => route('users.store'),
-        'userModel' => null,
-        'roles' => $roles,
-        'permissions' => $permissions,
-        'employees' => $employees,
-        'groupTitles' => $groupTitles,
-    ])
-@endif
-
-@if ($canManageUsers)
-    @foreach ($users as $managedUser)
-        @include('users.partials.form_modal', [
-            'modalId' => 'editUserModal' . $managedUser->id,
-            'modalTitle' => 'تعديل المستخدم: ' . $managedUser->full_name,
-            'action' => route('users.update', $managedUser),
-            'userModel' => $managedUser,
-            'roles' => $roles,
-            'permissions' => $permissions,
-            'employees' => $employees,
-            'groupTitles' => $groupTitles,
-        ])
-    @endforeach
-@endif
 @endsection
 
 @push('scripts')

@@ -656,6 +656,13 @@ class AccountingPageController extends Controller
                 'payment_date' => $paymentDate,
             ]);
 
+            if ($this->shouldReceivePurchaseStock((string) $lockedPurchase->status)) {
+                if (!$this->inventoryMovementService->hasMovementsForSource($lockedPurchase)) {
+                    $this->applyPurchaseStock((int) $lockedPurchase->company_id, $this->purchaseStockRequirementsFromItems($lockedPurchase->items));
+                }
+                $this->inventoryMovementService->syncPurchase($lockedPurchase->fresh(['items.product']));
+            }
+
             $journalEntry = $this->accountingService->createSupplierPaymentEntry(
                 $lockedPurchase->supplier,
                 $appliedAmount,
@@ -1037,6 +1044,13 @@ class AccountingPageController extends Controller
                     'payment_status' => $this->purchasePaymentStatus($updatedPaidAmount, (float) $purchase->total),
                     'status' => $this->purchaseStatusAfterPayment($purchase->status, $updatedPaidAmount, $updatedBalance),
                 ]);
+
+                if ($this->shouldReceivePurchaseStock((string) $purchase->status)) {
+                    if (!$this->inventoryMovementService->hasMovementsForSource($purchase)) {
+                        $this->applyPurchaseStock((int) $purchase->company_id, $this->purchaseStockRequirementsFromItems($purchase->items));
+                    }
+                    $this->inventoryMovementService->syncPurchase($purchase->fresh(['items.product']));
+                }
 
                 $remainingAmount = round($remainingAmount - $appliedAmount, 2);
             }
@@ -3327,6 +3341,56 @@ class AccountingPageController extends Controller
         return view('hr', compact('company', 'employees', 'branches'));
     }
 
+    public function createEmployee(Request $request): View
+    {
+        $company = $this->company($request);
+        $branches = Branch::query()
+            ->where('company_id', $company->id)
+            ->orderByDesc('is_default')
+            ->orderBy('name')
+            ->get();
+
+        $statusLabels = [
+            'active' => 'نشط',
+            'on_leave' => 'في إجازة',
+            'terminated' => 'منتهي الخدمة',
+        ];
+        $employmentTypeLabels = [
+            'full_time' => 'دوام كامل',
+            'part_time' => 'دوام جزئي',
+            'contract' => 'عقد',
+            'temporary' => 'مؤقت',
+        ];
+
+        return view('employees.create', compact('company', 'branches', 'statusLabels', 'employmentTypeLabels'));
+    }
+
+    public function editEmployee(Request $request, Employee $employee): View
+    {
+        $company = $this->company($request);
+        abort_if((int) $employee->company_id !== (int) $company->id, 404);
+
+        $branches = Branch::query()
+            ->where('company_id', $company->id)
+            ->orderByDesc('is_default')
+            ->orderBy('name')
+            ->get();
+
+        $statusLabels = [
+            'active' => 'نشط',
+            'on_leave' => 'في إجازة',
+            'terminated' => 'منتهي الخدمة',
+        ];
+        $employmentTypeLabels = [
+            'full_time' => 'دوام كامل',
+            'part_time' => 'دوام جزئي',
+            'contract' => 'عقد',
+            'temporary' => 'مؤقت',
+        ];
+
+        return view('employees.edit', compact('company', 'employee', 'branches', 'statusLabels', 'employmentTypeLabels'));
+    }
+
     public function storeEmployee(Request $request): RedirectResponse
     {
         $company = $this->company($request);
@@ -5213,7 +5277,7 @@ class AccountingPageController extends Controller
 
     private function shouldReceivePurchaseStock(string $status): bool
     {
-        return $status === 'approved';
+        return in_array($status, ['pending', 'approved', 'partial', 'paid'], true);
     }
 
     private function invoicePaymentStatus(float $paidAmount, float $total): string
