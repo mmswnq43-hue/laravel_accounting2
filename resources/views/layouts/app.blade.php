@@ -12,8 +12,16 @@
     @stack('styles')
 </head>
 <body>
-    @php($currentUser = request()->user())
-    @php($currentCompany = auth()->user()?->company ?? \App\Models\Company::first())
+    @php
+        $currentUser = request()->user();
+        $currentCompany = auth()->user()?->company ?? \App\Models\Company::first();
+        $canInvoice  = $currentUser?->hasPermission('manage_invoices');
+        $canPurchase = $currentUser?->hasPermission('manage_purchases');
+        $canProduct  = $currentUser?->hasPermission('manage_products');
+        $canAccount  = $currentUser?->hasPermission('manage_accounts');
+        $canJournal  = $currentUser?->hasPermission('manage_journal_entries');
+        $hasQuickActions = $canInvoice || $canPurchase || $canProduct || $canAccount || $canJournal;
+    @endphp
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
             @if($currentCompany?->logo_url)
@@ -126,14 +134,6 @@
             @endif
 
             <div class="top-nav-right">
-                @php
-                    $canInvoice = $currentUser?->hasPermission('manage_invoices');
-                    $canPurchase = $currentUser?->hasPermission('manage_purchases');
-                    $canProduct = $currentUser?->hasPermission('manage_products');
-                    $canAccount = $currentUser?->hasPermission('manage_accounts');
-                    $canJournal = $currentUser?->hasPermission('manage_journal_entries');
-                    $hasQuickActions = $canInvoice || $canPurchase || $canProduct || $canAccount || $canJournal;
-                @endphp
                 @if ($hasQuickActions)
                 <div class="dropdown me-2">
                     <button class="btn btn-gradient btn-sm dropdown-toggle" data-bs-toggle="dropdown" title="إجراءات سريعة">
