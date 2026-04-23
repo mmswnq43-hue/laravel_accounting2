@@ -433,13 +433,18 @@ class AccountingPageController extends Controller
                 $this->applyPurchaseStock($company->id, $this->purchaseStockRequirementsFromItems($purchase->fresh()->items));
             }
 
-            $freshPurchase = $purchase->fresh(['items.product', 'supplier', 'paymentAccount']);
-            $journalEntry = $this->accountingService->syncPurchaseEntry($freshPurchase, $user);
-            $this->paymentSyncService->syncPurchasePayment($freshPurchase, $journalEntry);
+            if ((string) $purchase->status !== 'draft') {
+                $freshPurchase = $purchase->fresh(['items.product', 'supplier', 'paymentAccount']);
+                $journalEntry = $this->accountingService->syncPurchaseEntry($freshPurchase, $user);
+                $this->paymentSyncService->syncPurchasePayment($freshPurchase, $journalEntry);
 
-            if ($this->shouldReceivePurchaseStock((string) $freshPurchase->status)) {
-                $this->inventoryMovementService->syncPurchase($freshPurchase);
+                if ($this->shouldReceivePurchaseStock((string) $freshPurchase->status)) {
+                    $this->inventoryMovementService->syncPurchase($freshPurchase);
+                } else {
+                    $this->inventoryMovementService->deleteForSource($purchase);
+                }
             } else {
+                $this->accountingService->deleteAutomaticEntriesForSource($purchase);
                 $this->inventoryMovementService->deleteForSource($purchase);
             }
         });
@@ -5836,6 +5841,7 @@ class AccountingPageController extends Controller
                         'type' => 'product',
                         'cost_price' => $costPrice > 0 ? $costPrice : ($sellPrice > 0 ? $sellPrice : 0),
                         'sell_price' => $sellPrice > 0 ? $sellPrice : ($costPrice > 0 ? $costPrice * 1.3 : 0),
+                        'tax_rate' => $taxRate,
                         'stock_quantity' => 0,
                         'is_active' => true,
                     ]);
@@ -5844,6 +5850,7 @@ class AccountingPageController extends Controller
                     $product->update([
                         'cost_price' => $costPrice > 0 ? $costPrice : $product->cost_price,
                         'sell_price' => $sellPrice > 0 ? $sellPrice : $product->sell_price,
+                        'tax_rate' => $taxRate > 0 ? $taxRate : $product->tax_rate,
                     ]);
                 }
             } else {
@@ -5853,6 +5860,7 @@ class AccountingPageController extends Controller
                     $product->update([
                         'cost_price' => $costPrice > 0 ? $costPrice : $product->cost_price,
                         'sell_price' => $sellPrice > 0 ? $sellPrice : $product->sell_price,
+                        'tax_rate' => $taxRate > 0 ? $taxRate : $product->tax_rate,
                     ]);
                 }
             }

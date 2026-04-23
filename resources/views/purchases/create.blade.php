@@ -9,7 +9,7 @@
     $paymentStatusValue = old('payment_status', 'pending');
     $paymentAccountIdValue = old('payment_account_id');
     $paidAmountValue = old('paid_amount', '0');
-    $statusValue = old('status', 'draft');
+    $statusValue = old('status', 'approved');
     $notesValue = old('notes', '');
     $supplierInvoiceNumberValue = old('supplier_invoice_number', '');
 @endphp
