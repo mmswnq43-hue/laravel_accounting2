@@ -24,7 +24,6 @@
         <p class="text-muted mt-2 mb-0">كل موظف مرتبط بفرع واحد، ويمكن ربط المستخدمين بهم من شاشة إدارة المستخدمين.</p>
     </div>
     @if ($canManageEmployees)
-    @if ($canManageEmployees)
         <a href="{{ route('employees.create') }}" class="btn btn-primary">
             <i class="fas fa-plus ms-1"></i> إضافة موظف
         </a>
