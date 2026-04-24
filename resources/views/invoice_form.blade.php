@@ -868,7 +868,8 @@ if (quickAddCustomerForm) {
             body: formData,
             headers: {
                 'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json'
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
             }
         })
         .then(response => response.json().then(data => ({ status: response.status, body: data })))

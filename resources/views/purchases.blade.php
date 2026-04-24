@@ -713,8 +713,8 @@
                                 <input type="date" name="payment_date" class="form-control" value="{{ old('payment_date') }}">
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label">ملف الفاتورة</label>
-                                <input type="file" name="attachment" class="form-control" accept="application/pdf,image/*" required>
+                                <label class="form-label">ملف الفاتورة (اختياري)</label>
+                                <input type="file" name="attachment" class="form-control" accept="application/pdf,image/*">
                                 <small class="text-muted">PDF أو صورة، حتى 8 ميغابايت</small>
                             </div>
                             <div class="col-md-12">

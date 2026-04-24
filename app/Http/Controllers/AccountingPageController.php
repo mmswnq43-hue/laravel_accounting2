@@ -5023,6 +5023,11 @@ class AccountingPageController extends Controller
             'item_tax_rate.*' => ['nullable', 'numeric', 'min:0', 'max:100'],
         ]);
 
+        // Ensure optional arrays are present even if not sent
+        $validated['item_product_name'] = $validated['item_product_name'] ?? array_fill(0, count($validated['item_description']), null);
+        $validated['item_tax_rate'] = $validated['item_tax_rate'] ?? array_fill(0, count($validated['item_description']), 0);
+
+
         $totals = $this->calculatePurchaseTotals($validated);
         $enteredPaidAmount = round((float) ($validated['paid_amount'] ?? 0), 2);
         $requestedPaymentStatus = $validated['payment_status'] ?? 'pending';
@@ -5829,7 +5834,10 @@ class AccountingPageController extends Controller
             if (empty($productId) && !empty($productName)) {
                 // البحث عن منتج موجود بالاسم
                 $product = Product::where('company_id', $purchase->company_id)
-                    ->where('name', trim($productName))
+                    ->where(function($q) use ($productName) {
+                        $q->where('name', trim($productName))
+                          ->orWhere('name_ar', trim($productName));
+                    })
                     ->first();
 
                 if (!$product) {
