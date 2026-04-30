@@ -121,7 +121,7 @@
                             </div>
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
-                        <form method="POST" action="{{ route('products.update', $product) }}">
+                        <form method="POST" action="{{ route('products.update', $product) }}" data-user-editor-form data-initial-dirty="true">
                             @csrf
                             @method('PUT')
                             <input type="hidden" name="product_modal" value="{{ $editModalKey }}">
@@ -209,7 +209,7 @@
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <form method="POST" action="{{ route('products.store') }}">
+                <form method="POST" action="{{ route('products.store') }}" data-user-editor-form data-initial-dirty="true">
                     @csrf
                     <input type="hidden" name="product_modal" value="create">
                     <div class="modal-body user-editor-body">
