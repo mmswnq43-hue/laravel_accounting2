@@ -1149,6 +1149,8 @@ class AccountingPageController extends Controller
             ->get();
 
         $suggestedExpenseReference = $this->referenceGenerator->nextExpenseReference($company->id);
+        /** @var \App\Models\User $user */
+        $user = $request->user();
 
         return view('expenses', [
             'company' => $company,
@@ -1157,6 +1159,8 @@ class AccountingPageController extends Controller
             'paymentAccounts' => $paymentAccounts,
             'suggestedExpenseReference' => $suggestedExpenseReference,
             'expenseTargets' => $expenseTargets,
+            'canManageExpenses' => $user->hasPermission('manage_accounts'),
+            'activeExpenseModal' => old('expense_modal', ''),
             'filters' => [
                 'search' => (string) ($filters['search'] ?? ''),
                 'date_from' => (string) ($filters['date_from'] ?? ''),
