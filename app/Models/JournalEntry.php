@@ -53,4 +53,9 @@ class JournalEntry extends Model
     {
         return $this->hasMany(JournalLine::class);
     }
+
+    public function scopeForCompany($query, int $companyId)
+    {
+        return $query->where('company_id', $companyId);
+    }
 }

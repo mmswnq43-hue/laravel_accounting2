@@ -6,6 +6,10 @@ use App\Http\Controllers\AccountingPageController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\ProductReportController;
+use App\Http\Controllers\Reports\SalesReportController;
+use App\Http\Controllers\Reports\InventoryReportController;
+use App\Http\Controllers\Reports\FinancialReportController;
+use App\Http\Controllers\Reports\TaxReportController;
 
 // Authentication Routes
 Route::get('/', [AuthController::class, 'showLanding'])->name('landing');
@@ -110,6 +114,42 @@ Route::middleware(['auth', 'password.change', 'company'])->group(function () {
         Route::get('/reports/view/{report}', [AccountingPageController::class, 'reportShow'])->name('reports.show');
         Route::get('/reports/inventory', [AccountingPageController::class, 'inventoryReport'])->name('reports.inventory');
         Route::get('/reports/financial', [AccountingPageController::class, 'financialReport'])->name('reports.financial');
+
+        // ── Group 1: Sales Reports ────────────────────────────────────────
+        Route::get('/reports/sales/register',              [SalesReportController::class, 'salesRegister'])->name('reports.sales.register');
+        Route::get('/reports/sales/register/export',       [SalesReportController::class, 'exportSalesRegister'])->name('reports.sales.register.export');
+        Route::get('/reports/sales/profitability',         [SalesReportController::class, 'productProfitability'])->name('reports.sales.profitability');
+        Route::get('/reports/sales/profitability/export',  [SalesReportController::class, 'exportProductProfitability'])->name('reports.sales.profitability.export');
+        Route::get('/reports/sales/channels',              [SalesReportController::class, 'salesByChannel'])->name('reports.sales.channels');
+        Route::get('/reports/sales/channels/export',       [SalesReportController::class, 'exportSalesByChannel'])->name('reports.sales.channels.export');
+        Route::get('/reports/sales/customers',             [SalesReportController::class, 'customerAnalytics'])->name('reports.sales.customers');
+        Route::get('/reports/sales/customers/export',      [SalesReportController::class, 'exportCustomerAnalytics'])->name('reports.sales.customers.export');
+        Route::get('/reports/sales/returns',               [SalesReportController::class, 'salesReturns'])->name('reports.sales.returns');
+        Route::get('/reports/sales/returns/export',        [SalesReportController::class, 'exportSalesReturns'])->name('reports.sales.returns.export');
+
+        // ── Group 2: Inventory Reports ────────────────────────────────────
+        Route::get('/reports/inventory/valuation',         [InventoryReportController::class, 'inventoryValuation'])->name('reports.inventory.valuation');
+        Route::get('/reports/inventory/valuation/export',  [InventoryReportController::class, 'exportInventoryValuation'])->name('reports.inventory.valuation.export');
+        Route::get('/reports/inventory/stock-ledger',      [InventoryReportController::class, 'stockLedger'])->name('reports.inventory.stock-ledger');
+        Route::get('/reports/inventory/stock-ledger/export', [InventoryReportController::class, 'exportStockLedger'])->name('reports.inventory.stock-ledger.export');
+        Route::get('/reports/inventory/low-stock',         [InventoryReportController::class, 'lowStock'])->name('reports.inventory.low-stock');
+        Route::get('/reports/inventory/low-stock/export',  [InventoryReportController::class, 'exportLowStock'])->name('reports.inventory.low-stock.export');
+        Route::get('/reports/inventory/slow-moving',       [InventoryReportController::class, 'slowMoving'])->name('reports.inventory.slow-moving');
+        Route::get('/reports/inventory/slow-moving/export', [InventoryReportController::class, 'exportSlowMoving'])->name('reports.inventory.slow-moving.export');
+
+        // ── Group 3: Financial Reports ────────────────────────────────────
+        Route::get('/reports/financial/cash-flow',         [FinancialReportController::class, 'cashFlow'])->name('reports.financial.cash-flow');
+        Route::get('/reports/financial/cash-flow/export',  [FinancialReportController::class, 'exportCashFlow'])->name('reports.financial.cash-flow.export');
+        Route::get('/reports/financial/ar-aging',          [FinancialReportController::class, 'arAging'])->name('reports.financial.ar-aging');
+        Route::get('/reports/financial/ar-aging/export',   [FinancialReportController::class, 'exportArAging'])->name('reports.financial.ar-aging.export');
+        Route::get('/reports/financial/ap-aging',          [FinancialReportController::class, 'apAging'])->name('reports.financial.ap-aging');
+        Route::get('/reports/financial/ap-aging/export',   [FinancialReportController::class, 'exportApAging'])->name('reports.financial.ap-aging.export');
+        Route::get('/reports/financial/expenses',          [FinancialReportController::class, 'expenseAnalysis'])->name('reports.financial.expenses');
+        Route::get('/reports/financial/expenses/export',   [FinancialReportController::class, 'exportExpenseAnalysis'])->name('reports.financial.expenses.export');
+
+        // ── Group 4: Tax & Compliance ─────────────────────────────────────
+        Route::get('/reports/tax/vat',                     [TaxReportController::class, 'vatReturn'])->name('reports.tax.vat');
+        Route::get('/reports/tax/vat/export',              [TaxReportController::class, 'exportVatReturn'])->name('reports.tax.vat.export');
     });
 
     Route::middleware(['auth', 'company'])->prefix('{locale?}')->group(function () {

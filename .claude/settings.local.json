@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"D:\\\\خال\\\\big_projects\\\\laravel\\\\laravel_accounting\" -Directory)",
+      "Bash(Select-Object Name)",
+      "Bash(New-Item -ItemType Directory -Force -Path \"D:\\\\خال\\\\big_projects\\\\laravel\\\\laravel_accounting\\\\app\\\\Http\\\\Controllers\\\\Reports\")",
+      "Bash(Out-Null)",
+      "Bash(Write-Output \"done\")",
+      "Bash(php artisan *)",
+      "Bash(php -r \"require 'vendor/autoload.php'; echo class_exists\\('App\\\\Http\\\\Controllers\\\\Reports\\\\SalesReportController'\\) ? 'OK' : 'MISSING'; echo PHP_EOL; echo class_exists\\('App\\\\Http\\\\Controllers\\\\Reports\\\\InventoryReportController'\\) ? 'OK' : 'MISSING'; echo PHP_EOL; echo class_exists\\('App\\\\Http\\\\Controllers\\\\Reports\\\\FinancialReportController'\\) ? 'OK' : 'MISSING'; echo PHP_EOL; echo class_exists\\('App\\\\Http\\\\Controllers\\\\Reports\\\\TaxReportController'\\) ? 'OK' : 'MISSING'; echo PHP_EOL;\")",
+      "Bash(php -l routes/web.php)"
+    ]
+  }
+}
